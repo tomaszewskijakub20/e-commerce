@@ -1,16 +1,97 @@
-# React + Vite
+# E-commerce Frontend – Dynamiczne Atrybuty Produktów
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Autor:** Jakub Tomaszewski
+**Technologie:** React, Tailwind CSS, React Router, Axios
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 📘 Opis projektu
 
-## React Compiler
+Projekt stanowi frontendową część platformy **E-commerce z dynamicznymi atrybutami produktów**, opracowanej w ramach pracy inżynierskiej.
+Aplikacja umożliwia przeglądanie, filtrowanie i wyświetlanie produktów o zróżnicowanych, dynamicznie definiowanych atrybutach.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Frontend został zbudowany w oparciu o **React** (z wykorzystaniem Vite) i **Tailwind CSS** w celu zapewnienia wysokiej wydajności oraz nowoczesnego, responsywnego interfejsu użytkownika.
 
-## Expanding the ESLint configuration
+Aplikacja komunikuje się z backendem (API) stworzonym przez współautora projektu, przesyłając i pobierając dane za pomocą zapytań HTTP realizowanych przez bibliotekę **Axios**.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+---
+
+## ⚙️ Użyte technologie
+
+| Technologia      | Zastosowanie                                                                 |
+| ---------------- | ---------------------------------------------------------------------------- |
+| **React**        | Biblioteka JavaScript do budowy komponentowego interfejsu użytkownika.       |
+| **Tailwind CSS** | Framework CSS umożliwiający szybkie stylowanie za pomocą klas narzędziowych. |
+| **React Router** | Biblioteka do obsługi tras i nawigacji pomiędzy podstronami aplikacji.       |
+| **Axios**        | Biblioteka do komunikacji z backendem poprzez zapytania HTTP.                |
+| **Vite**         | Narzędzie do szybkiego budowania i uruchamiania aplikacji React.             |
+
+---
+
+## 🚀 Uruchomienie projektu lokalnie
+
+### 1️⃣ Klonowanie repozytorium
+
+```bash
+git clone https://github.com/tomaszewskijakub20/e-commerce.git
+cd e-commerce
+```
+
+### 2️⃣ Instalacja zależności
+
+```bash
+npm install
+```
+
+### 3️⃣ Konfiguracja zmiennych środowiskowych
+
+Utwórz plik `.env` na podstawie `.env.example` i uzupełnij dane:
+
+```
+VITE_API_URL=http://localhost:5000/api
+```
+
+### 4️⃣ Uruchomienie aplikacji
+
+```bash
+npm run dev
+```
+
+Aplikacja będzie dostępna pod adresem:
+
+```
+http://localhost:5173
+```
+
+---
+
+## 🧩 Struktura projektu
+
+```
+src/
+├── assets/           # Pliki statyczne
+├── components/       # Komponenty wielokrotnego użytku
+├── pages/            # Widoki stron
+├── App.jsx           # Główny komponent aplikacji
+├── main.jsx          # Punkt wejścia aplikacji
+└── index.css         # Style globalne
+```
+
+---
+
+## 🔗 Integracja z backendem
+
+Frontend łączy się z API backendu (tworzonego przez współautora projektu) za pomocą zmiennej środowiskowej `VITE_API_URL`.
+
+Przykład zapytania:
+
+```js
+import axios from "axios";
+
+const apiUrl = import.meta.env.VITE_API_URL;
+
+export async function getProducts() {
+  const response = await axios.get(`${apiUrl}/products`);
+  return response.data;
+}
+```
