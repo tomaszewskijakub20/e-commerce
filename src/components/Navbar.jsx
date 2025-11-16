@@ -1,55 +1,73 @@
-import { NavLink } from "react-router-dom";
-import { ShoppingCart, LogIn, Phone, Search, Home } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ShoppingCart, LogIn, Phone, Search, Home, User } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const [cartCount] = useState(3);
+  const [searchQuery, setSearchQuery] = useState("");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
+
+  const isActive = (path) => {
+    return location.pathname === path;
+  };
+
+  const handleSearch = (e) => {
+    e.preventDefault(); // Zapobiegaj domyślnej akcji formularza
+    if (searchQuery.trim()) {
+    // Przekieruj do strony wyników wyszukiwania
+    navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    setSearchQuery(''); // Opcjonalnie: wyczyść pole wyszukiwania
+    }
+  };
 
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-white shadow-md">
       <div className="max-w-7xl mx-auto px-8 py-5 flex justify-between items-center">
         {/* Logo */}
-        <NavLink to="/" className="text-3xl font-bold text-black">
+        <Link to="/" className="text-3xl font-bold text-black">
           E-Shop
-        </NavLink>
+        </Link>
+
+        {/* Pole wyszukiwania */}
+        <div className="flex-1 max-w-2xl mx-8">
+          <form onSubmit={handleSearch} className="relative">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+              type="text"
+              placeholder="Szukaj produktów..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black text-lg"
+              />
+            </div>
+          </form>
+        </div>
 
         {/* Menu */}
-        <div className="flex items-center gap-12">
-          <NavLink
+        <div className="flex items-center gap-8 text-lg font-medium">
+          <Link
             to="/"
-            className={({ isActive }) =>
-              `flex items-center gap-2 ${isActive ? "text-black font-bold" : "text-gray-600 hover:text-black"}`
-            }
+            className={`flex items-center gap-2 ${isActive("/") ? "text-black font-bold" : "text-gray-600 hover:text-black"}`}
           >
             <Home size={24} />
             Strona główna
-          </NavLink>
+          </Link>
 
-          <NavLink
-            to="/search"
-            className={({ isActive }) =>
-              `flex items-center gap-2 ${isActive ? "text-black font-bold" : "text-gray-600 hover:text-black"}`
-            }
-          >
-            <Search size={24} />
-            Wyszukaj
-          </NavLink>
-
-          <NavLink
+          <Link
             to="/contact"
-            className={({ isActive }) =>
-              `flex items-center gap-2 ${isActive ? "text-black font-bold" : "text-gray-600 hover:text-black"}`
-            }
+            className={`flex items-center gap-2 ${isActive("/contact") ? "text-black font-bold" : "text-gray-600 hover:text-black"}`}
           >
             <Phone size={24} />
             Kontakt
-          </NavLink>
+          </Link>
 
-          <NavLink
+          <Link
             to="/cart"
-            className={({ isActive }) =>
-              `flex items-center gap-2 relative ${isActive ? "text-black font-bold" : "text-gray-600 hover:text-black"}`
-            }
+            className={`relative flex items-center gap-2 ${isActive("/cart") ? "text-black font-bold" : "text-gray-600 hover:text-black"}`}
           >
             <ShoppingCart size={24} />
             Koszyk
@@ -58,17 +76,26 @@ export default function Navbar() {
                 {cartCount}
               </span>
             )}
-          </NavLink>
+          </Link>
 
-          <NavLink
-            to="/login"
-            className={({ isActive }) =>
-              `flex items-center gap-2 ${isActive ? "text-black font-bold" : "text-gray-600 hover:text-black"}`
-            }
-          >
-            <LogIn size={24} />
-            Zaloguj się
-          </NavLink>
+          {/* Warunkowe wyświetlanie */}
+          {isAuthenticated ? (
+            <Link
+              to="/account"
+              className={`flex items-center gap-2 ${isActive("/account") ? "text-black font-bold" : "text-gray-600 hover:text-black"}`}
+            >
+              <User size={24} />
+              Moje konto
+            </Link>
+          ) : (
+            <Link
+              to="/login"
+              className={`flex items-center gap-2 ${isActive("/login") ? "text-black font-bold" : "text-gray-600 hover:text-black"}`}
+            >
+              <LogIn size={24} />
+              Zaloguj się
+            </Link>
+          )}
         </div>
       </div>
     </nav>

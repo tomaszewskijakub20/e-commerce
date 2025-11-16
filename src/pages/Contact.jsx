@@ -9,36 +9,92 @@ export default function Contact() {
     message: "",
     acceptTerms: false
   });
+  const [error, setError] = useState("");
 
+  // Obsługa zmian w formularzu
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+    setError("");
   };
 
+  // Walidacja formularza
+  const validateForm = () => {
+    if (!formData.name.trim()) {
+      return "Imię i nazwisko jest wymagane";
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      return "Proszę podać poprawny adres email";
+    }
+    
+    if (!formData.subject) {
+      return "Proszę wybrać temat";
+    }
+    
+    if (!formData.message.trim()) {
+      return "Wiadomość jest wymagana";
+    }
+    
+    if (!formData.acceptTerms) {
+      return "Musisz zaakceptować przetwarzanie danych";
+    }
+    
+    return null;
+  };
+
+  // Obsługa wysyłania formularza
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    // TODO: Dodać wysyłanie do API gdy backend będzie gotowy
     console.log('Formularz kontaktowy:', formData);
-    // Tutaj dodasz logikę wysyłania formularza
+    
+    // Reset formularza po wysłaniu
+    setFormData({
+      name: "",
+      email: "",
+      subject: "",
+      message: "",
+      acceptTerms: false
+    });
+    
+    // Tymczasowy komunikat sukcesu
+    alert("Wiadomość została wysłana! Odpowiemy w ciągu 24 godzin.");
   };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* Nagłówek */}
-        <div className="text-center mb-12">
+        {/* Nagłówek z paddingiem na górze */}
+        <div className="text-center mb-12 pt-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">Kontakt</h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Masz pytania? Chętnie pomożemy! Skontaktuj się z nami, a nasz zespół odpowie tak szybko, jak to możliwe.
           </p>
         </div>
 
+        {/* Komunikat o błędzie */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-center mb-6">
+            {error}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* Lewa kolumna - Informacje kontaktowe */}
+          {/* Informacje kontaktowe */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Dane kontaktowe</h2>
@@ -99,7 +155,7 @@ export default function Contact() {
                 </div>
               </div>
 
-              {/* Mapka placeholder */}
+              {/* Mapa placeholder */}
               <div className="mt-8 bg-gray-200 rounded-lg h-48 flex items-center justify-center">
                 <p className="text-gray-500 text-center">
                   🗺️ Mapa będzie tutaj<br />
@@ -109,7 +165,7 @@ export default function Contact() {
             </div>
           </div>
 
-          {/* Prawa kolumna - Formularz kontaktowy */}
+          {/* Formularz kontaktowy */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Wyślij wiadomość</h2>
@@ -126,10 +182,11 @@ export default function Contact() {
                       id="name"
                       name="name"
                       required
+                      maxLength={100}
                       value={formData.name}
                       onChange={handleChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
-                      placeholder="Jan Kowalski"
+                      placeholder="Wpisz imię i nazwisko"
                     />
                   </div>
                   
@@ -142,10 +199,12 @@ export default function Contact() {
                       id="email"
                       name="email"
                       required
+                      maxLength={100}
+                      autoComplete="email"
                       value={formData.email}
                       onChange={handleChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
-                      placeholder="jan@example.com"
+                      placeholder="Wpisz adres e-mail"
                     />
                   </div>
                 </div>
@@ -182,6 +241,7 @@ export default function Contact() {
                     name="message"
                     rows="6"
                     required
+                    maxLength={1000}
                     value={formData.message}
                     onChange={handleChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black resize-vertical"
@@ -189,7 +249,7 @@ export default function Contact() {
                   />
                 </div>
 
-                {/* Checkbox */}
+                {/* Checkbox zgody */}
                 <div className="flex items-start">
                   <input
                     type="checkbox"
@@ -214,14 +274,14 @@ export default function Contact() {
                   Wyślij wiadomość
                 </button>
 
-                {/* Informacja */}
+                {/* Informacja dodatkowa */}
                 <p className="text-xs text-gray-500 text-center">
                   Pola oznaczone * są obowiązkowe. Odpowiadamy na wiadomości w ciągu 24 godzin w dni robocze.
                 </p>
               </form>
             </div>
 
-            {/* FAQ sekcja */}
+            {/* Sekcja FAQ */}
             <div className="mt-8 bg-white rounded-lg shadow-md p-6">
               <h3 className="text-xl font-bold text-gray-900 mb-4">Często zadawane pytania</h3>
               <div className="space-y-3">

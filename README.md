@@ -1,97 +1,84 @@
-# E-commerce Frontend – Dynamiczne Atrybuty Produktów
+# E-commerce Frontend – Praca Inżynierska
 
 **Autor:** Jakub Tomaszewski
-**Technologie:** React, Tailwind CSS, React Router, Axios
+**Technologie:** React, Vite, Tailwind CSS, React Router, Axios, Context API
 
 ---
 
 ## 📘 Opis projektu
 
-Projekt stanowi frontendową część platformy **E-commerce z dynamicznymi atrybutami produktów**, opracowanej w ramach pracy inżynierskiej.
-Aplikacja umożliwia przeglądanie, filtrowanie i wyświetlanie produktów o zróżnicowanych, dynamicznie definiowanych atrybutach.
+Projekt stanowi frontendową część platformy **E-commerce z dynamicznymi atrybutami produktów**. Aplikacja umożliwia zarządzanie (CRUD) oraz przeglądanie produktów i kategorii.
 
-Frontend został zbudowany w oparciu o **React** (z wykorzystaniem Vite) i **Tailwind CSS** w celu zapewnienia wysokiej wydajności oraz nowoczesnego, responsywnego interfejsu użytkownika.
+Frontend został zbudowany w oparciu o **React** (z Vite) i **Tailwind CSS**. Aplikacja implementuje **uwierzytelnianie oparte na tokenach JWT** (z odświeżaniem) oraz **trasy chronione** (Protected Routes) dla zwykłych użytkowników i administratorów (`ROLE_OWNER`).
 
-Aplikacja komunikuje się z backendem (API) stworzonym przez współautora projektu, przesyłając i pobierając dane za pomocą zapytań HTTP realizowanych przez bibliotekę **Axios**.
+Komunikacja z backendem (API) odbywa się poprzez centralny moduł **Axios** z interceptorami, które automatycznie dołączają token autoryzacyjny do zapytań.
 
 ---
 
 ## ⚙️ Użyte technologie
 
-| Technologia      | Zastosowanie                                                                 |
-| ---------------- | ---------------------------------------------------------------------------- |
-| **React**        | Biblioteka JavaScript do budowy komponentowego interfejsu użytkownika.       |
-| **Tailwind CSS** | Framework CSS umożliwiający szybkie stylowanie za pomocą klas narzędziowych. |
-| **React Router** | Biblioteka do obsługi tras i nawigacji pomiędzy podstronami aplikacji.       |
-| **Axios**        | Biblioteka do komunikacji z backendem poprzez zapytania HTTP.                |
-| **Vite**         | Narzędzie do szybkiego budowania i uruchamiania aplikacji React.             |
+| Technologia | Zastosowanie |
+| :--- | :--- |
+| **React** | Budowa komponentowego interfejsu użytkownika (UI). |
+| **Vite** | Narzędzie do szybkiego budowania i serwera deweloperskiego. |
+| **Tailwind CSS** | Framework CSS (utility-first) do szybkiego stylowania. |
+| **React Router** | Obsługa tras (routing) i nawigacja po stronie. |
+| **Axios** | Komunikacja z API (interceptory zapytań i odpowiedzi). |
+| **Context API** | Globalne zarządzanie stanem uwierzytelnienia (`AuthContext`). |
+| **Lucide Icons** | Zestaw ikon SVG. |
 
 ---
 
 ## 🚀 Uruchomienie projektu lokalnie
 
-### 1️⃣ Klonowanie repozytorium
+### 1. Klonowanie repozytorium
 
 ```bash
-git clone https://github.com/tomaszewskijakub20/e-commerce.git
+git clone [https://github.com/tomaszewskijakub20/e-commerce.git](https://github.com/tomaszewskijakub20/e-commerce.git)
 cd e-commerce
 ```
 
-### 2️⃣ Instalacja zależności
+### 2. Instalacja zależności
 
 ```bash
 npm install
 ```
 
-### 3️⃣ Konfiguracja zmiennych środowiskowych
+### 3. Konfiguracja zmiennych środowiskowych
 
-Utwórz plik `.env` na podstawie `.env.example` i uzupełnij dane:
+Utwórz plik `.env` w głównym katalogu projektu (możesz skopiować `.env.example`) i uzupełnij adres URL swojego backendu:
 
 ```
-VITE_API_URL=http://localhost:5000/api
+VITE_API_URL=http://localhost:8080/api
 ```
 
-### 4️⃣ Uruchomienie aplikacji
+### 4. Uruchomienie aplikacji
 
 ```bash
 npm run dev
 ```
 
-Aplikacja będzie dostępna pod adresem:
-
-```
-http://localhost:5173
-```
+Aplikacja będzie dostępna pod adresem: `http://localhost:5173` (lub innym wolnym porcie).
 
 ---
 
 ## 🧩 Struktura projektu
 
+Struktura projektu została zorganizowana z podziałem na logikę (services, context) i widoki (pages, components).
+
 ```
 src/
-├── assets/           # Pliki statyczne
-├── components/       # Komponenty wielokrotnego użytku
-├── pages/            # Widoki stron
-├── App.jsx           # Główny komponent aplikacji
-├── main.jsx          # Punkt wejścia aplikacji
-└── index.css         # Style globalne
-```
-
----
-
-## 🔗 Integracja z backendem
-
-Frontend łączy się z API backendu (tworzonego przez współautora projektu) za pomocą zmiennej środowiskowej `VITE_API_URL`.
-
-Przykład zapytania:
-
-```js
-import axios from "axios";
-
-const apiUrl = import.meta.env.VITE_API_URL;
-
-export async function getProducts() {
-  const response = await axios.get(`${apiUrl}/products`);
-  return response.data;
-}
+├── assets/         # Obrazki, pliki statyczne
+├── components/     # Komponenty globalne (Navbar, Footer)
+│   └── routes/     # Strażnicy tras (ProtectedRoute, OwnerRoute)
+├── context/        # Globalny stan (AuthContext.jsx)
+├── pages/          # Główne widoki/strony (Home, Login, Account)
+│   └── admin/      # Widoki panelu admina (Products, Categories)
+│       └── components/ # Komponenty admina (CategoryView, ProductEdit)
+├── services/       # Logika biznesowa i API
+│   ├── api.js      # Centralna konfiguracja Axios (interceptory)
+│   └── authService.js # Funkcje logowania/rejestracji
+├── App.jsx         # Główny router aplikacji (React Router)
+├── main.jsx        # Punkt wejścia aplikacji
+└── index.css       # Style globalne Tailwind
 ```

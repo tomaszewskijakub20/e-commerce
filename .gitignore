@@ -1,4 +1,23 @@
-node_modules
-dist
+# Zależności
+/node_modules
+
+# Pliki produkcyjne (build)
+/dist
+
+# Pliki logów
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Zmienne środowiskowe (NIGDY NIE WYSYŁAJ!)
 .env
+.env.local
+.env.development
+.env.production
+.env.*
+
+# Zachowaj plik przykładu
+!.env.example
+
+# Pliki systemowe
 .DS_Store
