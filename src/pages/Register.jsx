@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { UserPlus, Mail, Lock, Eye, EyeOff, User, XCircle, CheckCircle2 } from "lucide-react";
+import { UserPlus, Mail, Lock, Eye, EyeOff, User, XCircle, CheckCircle2, Clock } from "lucide-react";
 import { useState } from "react";
 import { authService } from "../services/authService";
 
@@ -15,7 +15,9 @@ export default function Register() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  // Stan do obsługi ekranu po pomyślnej rejestracji
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
+
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -25,7 +27,6 @@ export default function Register() {
       [name]: type === 'checkbox' ? checked : value
     }));
     setError("");
-    setSuccess("");
   };
 
   // Funkcja sprawdzająca wymagania hasła
@@ -38,17 +39,19 @@ export default function Register() {
     };
   };
 
+  // Walidacja hasła
   const validatePassword = (password) => {
     const requirements = getPasswordRequirements(password);
-    
+
     if (!requirements.length) return "Hasło musi mieć co najmniej 6 znaków";
     if (!requirements.uppercase) return "Hasło musi zawierać przynajmniej 1 dużą literę";
     if (!requirements.lowercase) return "Hasło musi zawierać przynajmniej 1 małą literę";
     if (!requirements.number) return "Hasło musi zawierać przynajmniej 1 cyfrę";
-    
+
     return null;
   };
 
+  // Sprawdzenie, czy formularz jest gotowy do wysłania
   const isFormValid = () => {
     return (
       formData.firstName.trim() &&
@@ -62,9 +65,10 @@ export default function Register() {
     );
   };
 
+  // Główna funkcja rejestracji
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Walidacja formularza
     const validationError = validateForm();
     if (validationError) {
@@ -74,7 +78,6 @@ export default function Register() {
 
     setLoading(true);
     setError("");
-    setSuccess("");
 
     const requestData = {
       firstName: formData.firstName.trim(),
@@ -85,19 +88,14 @@ export default function Register() {
 
     try {
       await authService.register(requestData);
-      
-      setSuccess("Konto zostało pomyślnie utworzone! Za chwilę zostaniesz przekierowany do logowania.");
-      
-      // Przekierowanie po 3 sekundach
-      setTimeout(() => {
-        navigate('/login', { 
-          state: { message: 'Rejestracja udana! Możesz się teraz zalogować.' } 
-        });
-      }, 3000);
-      
-    } catch (error) {      
+
+      // Ustawienie stanu sukcesu i wyświetlenie ekranu aktywacji
+      setRegistrationSuccess(true);
+
+    } catch (error) {
       let errorMessage = 'Wystąpił błąd podczas rejestracji.';
-      
+
+      // Obsługa błędów z API
       if (error.response?.status === 400) {
         errorMessage = 'Nieprawidłowe dane rejestracji. Sprawdź format email i hasło.';
       } else if (error.response?.status === 409) {
@@ -105,13 +103,14 @@ export default function Register() {
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
-      
+
       setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
+  // Dodatkowa walidacja (poza hasłem)
   const validateForm = () => {
     if (!formData.firstName.trim()) {
       return "Imię jest wymagane";
@@ -130,12 +129,58 @@ export default function Register() {
     if (passwordError) {
       return passwordError;
     }
-    
+
     return null;
   };
 
   const passwordRequirements = getPasswordRequirements(formData.password);
 
+
+  // Widok po udanej rejestracji (Ekran aktywacyjny)
+  if (registrationSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-2 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-6">
+          <div className="text-center">
+            <div className="mx-auto h-12 w-12 bg-green-600 rounded-full flex items-center justify-center">
+              <Mail className="h-6 w-6 text-white" />
+            </div>
+            <h2 className="mt-2 text-2xl font-bold text-gray-900">
+              Wysłano link aktywacyjny!
+            </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Twoje konto zostało utworzone, ale jest nieaktywne.<br />
+              Sprawdź skrzynkę <strong>{formData.email}</strong>, aby aktywować konto.
+            </p>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 space-y-3">
+            <p className="font-semibold text-gray-800">Instrukcje aktywacji:</p>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p className="flex items-center">
+                <CheckCircle2 className="h-4 w-4 mr-2 text-green-500 flex-shrink-0" />
+                Kliknij w link otrzymany w emailu.
+              </p>
+              <p className="flex items-center text-red-600">
+                <Clock className="h-4 w-4 mr-2 flex-shrink-0" />
+                Link aktywacyjny jest ważny tylko przez 15 minut.
+              </p>
+            </div>
+          </div>
+
+          <Link
+            to="/login"
+            className="w-full flex justify-center py-2 px-4 text-sm font-medium rounded-md text-white bg-black hover:bg-gray-800 transition-colors"
+          >
+            Wróć do logowania
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+
+  // Widok formularza rejestracyjnego
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-2 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-6">
@@ -157,16 +202,6 @@ export default function Register() {
             </Link>
           </p>
         </div>
-
-        {/* Komunikat sukcesu */}
-        {success && (
-          <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded text-center">
-            <div className="flex items-center justify-center space-x-2">
-              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-              <span>{success}</span>
-            </div>
-          </div>
-        )}
 
         {/* Wyświetlanie błędów */}
         {error && (
@@ -290,7 +325,7 @@ export default function Register() {
                   )}
                 </button>
               </div>
-              
+
               {/* Wymagania hasła */}
               {formData.password && (
                 <div className="mt-2 space-y-1">
@@ -391,11 +426,10 @@ export default function Register() {
             <button
               type="submit"
               disabled={loading || !isFormValid()}
-              className={`group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black transition-all duration-200 ${
-                loading || !isFormValid() 
-                  ? 'opacity-50 cursor-not-allowed' 
-                  : 'hover:shadow-md'
-              }`}
+              className={`group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black transition-all duration-200 ${loading || !isFormValid()
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:shadow-md'
+                }`}
             >
               {loading ? (
                 <div className="flex items-center space-x-2">

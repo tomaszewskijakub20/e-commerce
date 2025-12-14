@@ -2,13 +2,14 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ShoppingCart, LogIn, Phone, Search, Home, User } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useCart } from "../context/CartContext";
 
 export default function Navbar() {
-  const [cartCount] = useState(3);
   const [searchQuery, setSearchQuery] = useState("");
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+  const { cartCount } = useCart();
 
   const isActive = (path) => {
     return location.pathname === path;
@@ -17,9 +18,9 @@ export default function Navbar() {
   const handleSearch = (e) => {
     e.preventDefault(); // Zapobiegaj domyślnej akcji formularza
     if (searchQuery.trim()) {
-    // Przekieruj do strony wyników wyszukiwania
-    navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
-    setSearchQuery(''); // Opcjonalnie: wyczyść pole wyszukiwania
+      // Przekieruj do strony wyników wyszukiwania
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchQuery('');
     }
   };
 
@@ -37,11 +38,11 @@ export default function Navbar() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
-              type="text"
-              placeholder="Szukaj produktów..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black text-lg"
+                type="text"
+                placeholder="Szukaj produktów..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black text-lg"
               />
             </div>
           </form>

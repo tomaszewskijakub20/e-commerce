@@ -1,16 +1,72 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
+import {
   Folder, Plus, Search, Edit3, Trash2, ChevronLeft, ChevronRight,
-  ArrowLeft, Loader, X, Eye
+  ArrowLeft, Loader, X, Eye,
+  CheckCircle, AlertTriangle, XCircle, Info
 } from "lucide-react";
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
+// Komponent uniwersalnego modalu potwierdzenia
+const ConfirmationModal = ({
+  show, onClose, title, message, onConfirm,
+  confirmText = 'Potwierdź', cancelText = 'Anuluj',
+  type = 'info', isProcessing = false
+}) => {
+  if (!show) return null;
+
+  const styles = {
+    success: { Icon: CheckCircle, iconColor: 'text-green-600', confirmBg: 'bg-green-600 hover:bg-green-700' },
+    danger: { Icon: XCircle, iconColor: 'text-red-600', confirmBg: 'bg-red-600 hover:bg-red-700' },
+    warning: { Icon: AlertTriangle, iconColor: 'text-yellow-500', confirmBg: 'bg-yellow-600 hover:bg-yellow-700' },
+    info: { Icon: Info, iconColor: 'text-blue-500', confirmBg: 'bg-blue-600 hover:bg-blue-700' },
+  };
+
+  const { Icon, iconColor, confirmBg } = styles[type] || styles.info;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[1000] p-4">
+      <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex items-center">
+            <Icon className={`h-6 w-6 mr-3 ${iconColor}`} />
+            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-4" disabled={isProcessing}>
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="text-sm text-gray-600 mb-6">{message}</p>
+
+        <div className="flex justify-end space-x-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            disabled={isProcessing}
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`px-4 py-2 text-white rounded-lg ${confirmBg} disabled:opacity-50 flex items-center`}
+            disabled={isProcessing}
+          >
+            {isProcessing ? <Loader className="h-4 w-4 animate-spin mr-2" /> : null}
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 export default function Categories() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+
   const [allCategories, setAllCategories] = useState([]);
   const [activeCategories, setActiveCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,13 +79,14 @@ export default function Categories() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(50);
 
-  // Modal states
+  // Stan modala usuwania
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Ładowanie wszystkich danych (kategorie, statystyki)
   useEffect(() => {
     loadData();
   }, []);
@@ -39,16 +96,15 @@ export default function Categories() {
       setLoading(true);
       setError("");
 
-      // Pobieramy tylko kategorie
       const categoriesResponse = await api.get('/categories');
       const allCategoriesData = categoriesResponse.data;
-      
+
       setAllCategories(allCategoriesData);
-      
+
       const activeCategoriesData = filterActiveCategories(allCategoriesData);
       setActiveCategories(activeCategoriesData);
 
-      // Oblicz statystyki
+      // Obliczanie statystyk
       const totalActive = flattenCategories(activeCategoriesData).length;
       const totalMain = activeCategoriesData.filter(c => c.parentId === null).length;
 
@@ -56,7 +112,7 @@ export default function Categories() {
         activeCategories: totalActive,
         mainCategories: totalMain
       });
-      
+
     } catch (err) {
       setError("Błąd ładowania danych: " + err.message);
     } finally {
@@ -64,7 +120,7 @@ export default function Categories() {
     }
   };
 
-  // Filtrowanie tylko aktywnych kategorii (rekurencyjnie)
+  // Rekurencyjne filtrowanie tylko aktywnych kategorii
   const filterActiveCategories = (categoriesList) => {
     let result = [];
     categoriesList.forEach(category => {
@@ -81,14 +137,14 @@ export default function Categories() {
     return result;
   };
 
-  // Spłaszczanie kategorii z zachowaniem hierarchii
+  // Spłaszczanie kategorii z zachowaniem hierarchii dla widoku listy
   const flattenCategories = (categoriesList, level = 0) => {
     let result = [];
     categoriesList.forEach(category => {
       result.push({
         ...category,
         level: level,
-        displayName: '  '.repeat(level) + category.name
+        displayName: '  '.repeat(level) + category.name
       });
       if (category.children && category.children.length > 0) {
         result = result.concat(flattenCategories(category.children, level + 1));
@@ -101,15 +157,17 @@ export default function Categories() {
     return flattenCategories(activeCategories);
   }, [activeCategories]);
 
-  // Filtrowanie po wyszukiwaniu
+  // Filtrowanie kategorii po wyszukiwaniu (Client-side)
   const filteredCategories = useMemo(() => {
+    // Jeśli nie ma wyszukiwania, paginujemy
     if (!searchTerm) {
       const startIndex = currentPage * itemsPerPage;
       const endIndex = startIndex + itemsPerPage;
       return flatActiveCategories.slice(startIndex, endIndex);
     }
-    
-    return flatActiveCategories.filter(category => 
+
+    // Jeśli jest wyszukiwanie, ignorujemy paginację i filtrujemy wszystkie aktywne
+    return flatActiveCategories.filter(category =>
       category.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       category.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       category.seoSlug?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -119,7 +177,7 @@ export default function Categories() {
   const totalPages = Math.ceil(flatActiveCategories.length / itemsPerPage);
   const canManageCategories = user?.role === 'owner';
 
-  // Obsługa usuwania kategorii (soft delete)
+  // Obsługa usuwania kategorii (otwarcie modala)
   const handleDeleteClick = (category) => {
     if (!canManageCategories) {
       setError("Nie masz uprawnień do usuwania kategorii");
@@ -134,13 +192,15 @@ export default function Categories() {
     setCategoryToDelete(null);
   };
 
+  // Potwierdzenie i wykonanie usuwania (soft delete)
   const confirmDelete = async () => {
     if (!categoryToDelete) return;
 
     try {
       setDeleteLoading(true);
+      // Wywołanie API do "miękkiego" usuwania (ustawienia isActive na false)
       await api.delete(`/categories/${categoryToDelete.id}`);
-      await loadData();
+      await loadData(); // Odświeżenie danych
     } catch (err) {
       const errorMessage = "Błąd usuwania kategorii: " + (err.response?.data?.message || err.message);
       setError(errorMessage);
@@ -152,11 +212,12 @@ export default function Categories() {
   };
 
   // Nawigacja
-  const handleBackToAdmin = () => navigate("/account");
+  const handleBackToAdmin = () => navigate("/account/admin");
   const handleAddCategory = () => navigate("/admin/categories/add");
   const handleEditCategory = (categoryId) => navigate(`/admin/categories/${categoryId}/edit`);
   const handleViewCategory = (categoryId) => navigate(`/admin/categories/${categoryId}`);
 
+  // Renderowanie wizualnej hierarchii
   const renderCategoryLevel = (level) => {
     return (
       <div className="flex items-center">
@@ -181,7 +242,7 @@ export default function Categories() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         {/* Nagłówek */}
         <div className="mb-8 pt-8">
           <div className="flex justify-between items-center">
@@ -197,7 +258,7 @@ export default function Categories() {
               )}
             </div>
             <div className="flex space-x-3">
-              <button 
+              <button
                 onClick={handleBackToAdmin}
                 className="flex items-center space-x-2 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
               >
@@ -205,7 +266,7 @@ export default function Categories() {
                 <span>Powrót do panelu</span>
               </button>
               {canManageCategories && (
-                <button 
+                <button
                   onClick={handleAddCategory}
                   className="flex items-center space-x-2 bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
                 >
@@ -221,7 +282,7 @@ export default function Categories() {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
             {error}
-            <button 
+            <button
               onClick={loadData}
               className="ml-4 text-sm underline hover:no-underline"
             >
@@ -240,7 +301,7 @@ export default function Categories() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Szukaj po nazwie, opisie lub slug..."
+                placeholder="Szukaj po nazwie, opisie lub linku..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
@@ -294,10 +355,7 @@ export default function Categories() {
                         Kategoria
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Slug
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
+                        Link (Slug)
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Data utworzenia
@@ -310,14 +368,14 @@ export default function Categories() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredCategories.length === 0 ? (
                       <tr>
-                        <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
                           <Folder className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                           <p className="text-lg font-medium">
                             {searchTerm ? 'Brak pasujących kategorii' : 'Brak aktywnych kategorii'}
                           </p>
                           <p className="mt-2">
-                            {searchTerm 
-                              ? "Spróbuj zmienić kryteria wyszukiwania" 
+                            {searchTerm
+                              ? "Spróbuj zmienić kryteria wyszukiwania"
                               : "Dodaj pierwszą kategorię"}
                           </p>
                         </td>
@@ -329,9 +387,12 @@ export default function Categories() {
                             <div className="flex items-center">
                               {renderCategoryLevel(category.level)}
                               <div className="ml-2">
-                                <div className="text-sm font-medium text-gray-900">
+                                <button
+                                  onClick={() => handleViewCategory(category.id)}
+                                  className="text-sm font-medium text-gray-900 text-left hover:text-blue-600 transition-colors"
+                                >
                                   {category.name}
-                                </div>
+                                </button>
                                 {category.description && (
                                   <div className="text-sm text-gray-500">
                                     {category.description}
@@ -344,11 +405,6 @@ export default function Categories() {
                             <div className="text-sm text-gray-900 font-mono">
                               {category.seoSlug}
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                              Aktywna
-                            </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">
@@ -397,7 +453,7 @@ export default function Categories() {
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-gray-700">
                       Pokazano {Math.min(currentPage * itemsPerPage + 1, flatActiveCategories.length)}-
-                      {Math.min((currentPage + 1) * itemsPerPage, flatActiveCategories.length)} 
+                      {Math.min((currentPage + 1) * itemsPerPage, flatActiveCategories.length)}
                       z {flatActiveCategories.length} aktywnych kategorii
                     </div>
                     <div className="flex space-x-2">
@@ -408,11 +464,11 @@ export default function Categories() {
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </button>
-                      
+
                       <span className="px-3 py-1 text-sm">
                         Strona {currentPage + 1} z {totalPages}
                       </span>
-                      
+
                       <button
                         onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
                         disabled={currentPage === totalPages - 1}
@@ -429,56 +485,29 @@ export default function Categories() {
         </div>
 
         {/* Modal potwierdzenia usunięcia */}
-        {showDeleteModal && categoryToDelete && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-md w-full p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Potwierdzenie usunięcia</h3>
-                <button
-                  onClick={cancelDelete}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                  disabled={deleteLoading}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              
-              <p className="text-gray-600 mb-4">
-                Czy na pewno chcesz usunąć kategorię <strong>"{categoryToDelete.name}"</strong>?
-              </p>
-              
-              {categoryToDelete.children && categoryToDelete.children.length > 0 && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
-                  <p className="text-sm text-yellow-800">
-                    ⚠️ Uwaga: Ta kategoria ma podkategorie. Akcja usunie również wszystkie podkategorie.
-                  </p>
-                </div>
+        <ConfirmationModal
+          show={showDeleteModal}
+          onClose={cancelDelete}
+          onConfirm={confirmDelete}
+          title={`Potwierdź usunięcie kategorii: ${categoryToDelete?.name}`}
+          message={(
+            <>
+              Czy na pewno chcesz usunąć kategorię"{categoryToDelete?.name}"?
+              <br /><br />
+              {categoryToDelete?.children && categoryToDelete.children.length > 0 && (
+                <span className="font-semibold text-red-600 block mb-2">
+                  ⚠️ UWAGA: Ta kategoria ma zagnieżdżone podkategorie. Akcja usunie również wszystkie podkategorie!
+                </span>
               )}
-              
-              <p className="text-sm text-gray-500 mb-6">
-                Tej operacji nie można cofnąć.
-              </p>
-              
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={cancelDelete}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-                  disabled={deleteLoading}
-                >
-                  Anuluj
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                  disabled={deleteLoading}
-                >
-                  {deleteLoading && <Loader className="h-4 w-4 animate-spin" />}
-                  <span>{deleteLoading ? 'Usuwanie...' : 'Usuń kategorię'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+              Tej operacji nie można cofnąć.
+            </>
+          )}
+          confirmText="Usuń kategorię"
+          cancelText="Anuluj"
+          type="danger"
+          isProcessing={deleteLoading}
+        />
+
       </div>
     </div>
   );

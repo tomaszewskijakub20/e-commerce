@@ -14,6 +14,7 @@ export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
+  // Obsługa zmian w formularzu
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -23,9 +24,10 @@ export default function Login() {
     if (error) setError("");
   };
 
+  // Obsługa logowania
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.email || !formData.password) {
       setError("Wypełnij wszystkie pola");
       return;
@@ -39,12 +41,14 @@ export default function Login() {
         email: formData.email.trim(),
         password: formData.password
       });
-      
+
+      // Nawigacja po pomyślnym zalogowaniu
       navigate('/');
-      
+
     } catch (error) {
       let errorMessage = "Błędny email lub hasło";
-      
+
+      // Logika obsługi błędów sieciowych i serwerowych
       if (!error.response) {
         errorMessage = "Problem z połączeniem. Sprawdź połączenie internetowe.";
       } else if (error.response.status === 401) {
@@ -56,20 +60,19 @@ export default function Login() {
       } else if (error.response.status >= 500) {
         errorMessage = "Błąd serwera. Spróbuj ponownie za chwilę.";
       }
-      
-      // Jeśli backend zwraca komunikat, użyj go (możesz dodać tłumaczenie)
+
+      // Przetwarzanie komunikatów z backendu
       if (error.response?.data?.message) {
         const backendMessage = error.response.data.message;
-        // Tłumaczenie komunikatów z backendu
         if (backendMessage === "Invalid username or password") {
           errorMessage = "Błędny email lub hasło";
         } else if (backendMessage.includes("Authentication Failed")) {
           errorMessage = "Błąd uwierzytelniania";
         } else {
-          errorMessage = backendMessage; // Lub pozostaw oryginalny komunikat
+          errorMessage = backendMessage;
         }
       }
-      
+
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -177,8 +180,8 @@ export default function Login() {
           {/* Link do resetowania hasła */}
           <div className="flex justify-end">
             <div className="text-sm">
-              <Link 
-                to="/forgot-password" 
+              <Link
+                to="/forgot-password"
                 className="font-medium text-black hover:text-gray-800 transition-colors"
               >
                 Zapomniałeś hasła?
@@ -191,11 +194,10 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading || !formData.email || !formData.password}
-              className={`group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black transition-all duration-200 ${
-                loading || !formData.email || !formData.password 
-                  ? 'opacity-50 cursor-not-allowed' 
+              className={`group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black transition-all duration-200 ${loading || !formData.email || !formData.password
+                  ? 'opacity-50 cursor-not-allowed'
                   : 'hover:shadow-md'
-              }`}
+                }`}
             >
               {loading ? (
                 <div className="flex items-center space-x-2">

@@ -2,31 +2,34 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Star, ArrowRight, Truck, Shield, Headphones, Award, Loader } from "lucide-react";
 import api from "../services/api";
+import { useCart } from "../context/CartContext";
 
 export default function Home() {
   const [featured, setFeatured] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { addToCart } = useCart();
 
   // Pobieranie danych z API
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
-        
+
         const [featuredResponse, categoriesResponse] = await Promise.allSettled([
           api.get('/products/featured'), // Pobierz polecane produkty
-          api.get('/categories/active')  // Pobierz tylko aktywne kategorie
+          api.get('/categories/active') // Pobierz tylko aktywne kategorie
         ]);
 
         // Przetwarzanie produktów polecanych
         if (featuredResponse.status === 'fulfilled') {
+          // Używamy product.content, ponieważ API zwraca Page<ProductSummaryDTO>
           setFeatured(featuredResponse.value.data.content || []);
         } else {
           console.error('Błąd ładowania produktów polecanych:', featuredResponse.reason);
           setFeatured([]);
         }
-        
+
         // Przetwarzanie kategorii
         if (categoriesResponse.status === 'fulfilled') {
           setCategories(categoriesResponse.value.data || []);
@@ -43,8 +46,9 @@ export default function Home() {
     };
 
     loadData();
-  }, []); // Pusty dependency array - uruchom tylko raz
+  }, []); // Uruchom tylko raz
 
+  // Lista głównych cech/zalet sklepu
   const features = [
     {
       icon: <Truck className="h-8 w-8" />,
@@ -68,36 +72,37 @@ export default function Home() {
     }
   ];
 
-  // Funkcja pomocnicza do renderowania gwiazdek
+  // Funkcja do renderowania gwiazdek (oceny)
   const renderStars = (rating) => {
     return (
       <div className="flex items-center gap-1">
         {[1, 2, 3, 4, 5].map((star) => (
           <Star
             key={star}
-            className={`h-3 w-3 ${
-              star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-            }`}
+            className={`h-3 w-3 ${star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+              }`}
           />
         ))}
       </div>
     );
   };
 
-  // Funkcja do wyświetlania kategorii końcowych (liści)
+  // Funkcja do wybierania kategorii końcowych (liści)
   const getLeafCategories = (categoriesList) => {
     const leafCategories = [];
-    
+
     const findLeaves = (categoryList) => {
       categoryList.forEach(category => {
+        // Jeśli kategoria ma dzieci, przechodź dalej
         if (category.children && category.children.length > 0) {
           findLeaves(category.children);
         } else {
+          // Jeśli nie ma dzieci, jest liściem
           leafCategories.push(category);
         }
       });
     };
-    
+
     findLeaves(categoriesList);
     return leafCategories.slice(0, 4); // Pokaż tylko 4
   };
@@ -106,37 +111,41 @@ export default function Home() {
 
   // Komponent karty produktu
   const ProductCard = ({ product }) => (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+    <Link
+      to={`/product/${product.seoSlug}`}
+      className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+    >
       <div className="aspect-square overflow-hidden bg-gray-100">
         <img
-          src={product.thumbnailUrl || "/api/placeholder/300/300"} // Placeholder
+          src={product.thumbnailUrl || "/api/placeholder/300/300"}
           alt={product.name}
           className="w-full h-full object-cover hover:scale-105 transition-transform"
         />
       </div>
       <div className="p-4">
         <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{product.name}</h3>
-        
+
         <p className="text-gray-600 text-sm mb-2 line-clamp-2">
           {product.shortDescription}
         </p>
-        
-        <div className="flex items-center gap-2 mb-2">
-          {renderStars(4.5)} {/* Tymczasowa ocena */}
-          <span className="text-xs text-gray-500">(0)</span> {/* Tymczasowa liczba opinii */}
-        </div>
-        
+
         <div className="flex items-center gap-2 mb-3">
           <span className="text-lg font-bold text-gray-900">
             {typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'} zł
           </span>
         </div>
-        
-        <button className="w-full bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 transition-colors">
+
+        <button
+          onClick={(e) => {
+            e.preventDefault(); // Zapobiegaj przejściu do Linku
+            addToCart(product);
+          }}
+          className="w-full bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 transition-colors"
+        >
           Dodaj do koszyka
         </button>
       </div>
-    </div>
+    </Link>
   );
 
   // Ekran ładowania
@@ -162,7 +171,7 @@ export default function Home() {
               Sztuka <span className="text-blue-400">Rękodzieła</span>
             </h1>
             <p className="text-xl md:text-2xl mb-8 text-gray-300 max-w-2xl mx-auto">
-              Odkryj unikalne rzeźby, obrazy i wyroby artystyczne. 
+              Odkryj unikalne rzeźby, obrazy i wyroby artystyczne.
               Każdy produkt to dzieło stworzone z pasją i dbałością o detal.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -183,7 +192,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features Section */}
+      {/* Features */}
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -200,7 +209,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Bestsellery (używa polecanych, ale pokazuje tylko 3) */}
+      {/* Bestsellery */}
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center mb-8">
@@ -218,7 +227,7 @@ export default function Home() {
 
           {featured.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {featured.slice(0, 3).map((product) => ( 
+              {featured.slice(0, 3).map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}
             </div>
@@ -239,7 +248,7 @@ export default function Home() {
               <p className="text-gray-600 mt-2">Wybrane specjalnie dla Ciebie</p>
             </div>
             <Link
-              to="/products" // Później można zmienić na /products?filter=featured
+              to="/products"
               className="flex items-center gap-2 text-black font-semibold hover:gap-3 transition-all"
             >
               Wszystkie polecane <ArrowRight className="h-4 w-4" />
@@ -264,13 +273,13 @@ export default function Home() {
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">Popularne kategorie</h2>
-          
+
           {popularCategories.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               {popularCategories.map((category) => (
                 <Link
                   key={category.id}
-                  to={`/category/${category.id}`} // Zmienione z /category/${category.id}
+                  to={`/category/${category.id}`}
                   className="group relative overflow-hidden rounded-lg aspect-square bg-gray-100"
                 >
                   <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-end p-4">
@@ -290,7 +299,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Newsletter Section */}
+      {/* Newsletter */}
       <section className="py-16 bg-gray-900 text-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold mb-4">Bądź na bieżąco</h2>

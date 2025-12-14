@@ -27,12 +27,22 @@ export const authService = {
     }
   },
 
+  // Resetowanie hasła
+  resetPassword: async ({ token, newPassword }) => {
+    try {
+      const response = await api.post('/auth/reset-password', { token, newPassword });
+      return response.data;
+    } catch (error) {
+      console.error('Błąd resetowania hasła:', error);
+      throw error;
+    }
+  },
+
   // Pobierz dane zalogowanego użytkownika (ZWERYFIKUJ TOKEN)
   getMe: async () => {
     try {
-      // Interceptor w api.js automatycznie doda token z localStorage
       const response = await api.get('/auth/me');
-      return response.data; // Zwraca { email: "..." }
+      return response.data;
     } catch (error) {
       console.error('Błąd pobierania danych użytkownika (token może być nieważny):', error);
       throw error;
@@ -42,7 +52,6 @@ export const authService = {
   // Wylogowanie
   logout: () => {
     localStorage.removeItem('token');
-    // Usuń token z headers axios
     delete api.defaults.headers.common['Authorization'];
   },
 

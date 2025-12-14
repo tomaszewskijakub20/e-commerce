@@ -15,49 +15,25 @@ Aplikacja implementuje **uwierzytelnianie oparte na tokenach JWT** oraz **autory
 
 ## ✨ Główne Funkcjonalności
 
-Aplikacja podzielona jest na dwie główne strefy: publiczną (sklep) oraz chronioną (panel administratora).
+Aplikacja podzielona jest na dwie główne strefy: publiczną (sklep) oraz chronioną (panel administracyjny).
 
-### Panel Administratora (Właściciela)
+### Panel Administracyjny (`ROLE_OWNER`)
 
 Panel dostępny jest wyłącznie dla użytkowników z rolą `ROLE_OWNER`. Obejmuje pełen zakres operacji CRUD (Create, Read, Update, Delete) na kluczowych zasobach sklepu.
 
-* **Moduł Kategorii:**
-    * Pełne operacje **CRUD** na kategoriach.
-    * Zarządzanie **hierarchią** (tworzenie kategorii głównych i podkategorii).
-    * Automatyczne generowanie `seoSlug` z walidacją unikalności po stronie backendu.
-    * Obsługa usuwania typu "soft-delete" (dezaktywacja).
-
-* **Moduł Atrybutów:**
-    * Dynamiczne przypisywanie atrybutów do poszczególnych kategorii.
-    * Pełne operacje **CRUD** dla definicji atrybutów (np. nazwa: "Kolor", typ: "TEXT").
-    * Obsługa błędów walidacji (np. blokowanie duplikatów).
-
-* **Moduł Produktów:**
-    * **Tworzenie produktu:** Dwuetapowy proces (najpierw dane, potem zdjęcia) z automatycznym przekierowaniem.
-    * **Edycja produktu:** Zaawansowany formularz do modyfikacji wszystkich danych (ceny, opisy, statusy, VAT, SKU).
-    * **Dynamiczny formularz atrybutów:** Interfejs automatycznie renderuje pola do wypełnienia wartościami atrybutów (np. "Farba olejna", "50x70 cm") na podstawie kategorii, do której przypisany jest produkt.
-    * Obsługa logiki backendu (np. blokada zmiany kategorii, dopasowywanie DTO atrybutów).
-
-* **Moduł Zdjęć (w ramach Edycji Produktu):**
-    * Wysyłanie wielu zdjęć jednocześnie (`multipart/form-data`).
-    * Podgląd nowo dodanych plików przed wysłaniem.
-    * Usuwanie istniejących zdjęć.
-    * Ustawianie wybranego zdjęcia jako domyślnej miniaturki (`isThumbnail`) produktu.
+* **Moduł Kategorii:** Pełne operacje CRUD, zarządzanie hierarchią i statusami (`soft-delete`).
+* **Moduł Atrybutów:** Dynamiczne definiowanie atrybutów dla kategorii (np. 'Kolor', 'Rozmiar') z pełnym CRUD na definicjach.
+* **Moduł Produktów:** * Zaawansowana edycja i dodawanie produktów (ceny, opisy, SKU).
+    * **Dynamiczne Atrybuty Produktu:** Automatyczne renderowanie pól do wypełniania wartościami atrybutów na podstawie wybranej kategorii.
+* **Zarządzanie Mediami:** Wysyłanie wielu zdjęć, ustawianie miniaturki (`isThumbnail`) i zarządzanie tekstem alternatywnym (Alt Text) w ramach edycji produktu.
+* **Moduł Zamówień:** Przegląd i zarządzanie wszystkimi złożonymi zamówieniami.
 
 ### Strefa Użytkownika i Publiczna
 
-* **Uwierzytelnianie i Autoryzacja:**
-    * Pełny proces logowania (`/login`) i rejestracji (`/register`) z walidacją.
-    * Globalny stan (`AuthContext`) zarządzający sesją użytkownika w całej aplikacji.
-    * Obsługa wygaśnięcia tokena (automatyczne wylogowanie i przekierowanie).
-* **Trasy Chronione:**
-    * `ProtectedRoute`: Chroni strony zwykłego użytkownika (np. `/account`).
-    * `OwnerRoute`: Chroni *wszystkie* trasy panelu admina (np. `/admin/*`).
-* **Katalog Produktów i Kategorii:**
-    * Publiczne strony do przeglądania produktów i struktury kategorii.
-    * Dynamiczne ładowanie produktów przypisanych do wybranej kategorii.
-* **Strony Statyczne:**
-    * W pełni ostylowane strony informacyjne (Kontakt, FAQ, Regulamin, Polityka Prywatności).
+* **Uwierzytelnianie i Rejestracja:** Pełny proces logowania, rejestracji oraz resetowania hasła. Rejestracja wymaga aktywacji konta przez link wysłany na e-mail (token JWT).
+* **Koszyk i Checkout:** Lokalny stan koszyka (`CartContext`), dwuetapowa finalizacja zamówienia (wybór adresu, wybór płatności/akceptacja regulaminu).
+* **Katalog Publiczny:** Przeglądanie produktów, katalogu kategorii oraz szczegółów produktu.
+* **Trasy Chronione:** Wdrożono `ProtectedRoute` i `OwnerRoute` w oparciu o stan `AuthContext` dla pełnej kontroli dostępu.
 
 ---
 
@@ -65,11 +41,10 @@ Panel dostępny jest wyłącznie dla użytkowników z rolą `ROLE_OWNER`. Obejmu
 
 Aplikacja wykorzystuje przepływ oparty na `AuthContext` i interceptorach Axios, aby zapewnić płynne i bezpieczne zarządzanie sesją.
 
-1.  **Logowanie:** Użytkownik wysyła dane. Serwer zwraca token JWT, który jest zapisywany w `localStorage`.
-2.  **`AuthContext`:** Przechowuje stan użytkownika (`user`, `isAuthenticated`). Przy starcie aplikacji próbuje zweryfikować token za pomocą `GET /api/auth/me`.
-3.  **Interceptor Axios (Request):** Przed *każdym* wysłanym żądaniem do API, interceptor sprawdza `localStorage`. Jeśli znajdzie token, automatycznie dodaje go do nagłówka `Authorization: Bearer <token>`.
-4.  **`OwnerRoute` / `ProtectedRoute`:** Strażnicy tras sprawdzają stan w `AuthContext` przed renderowaniem komponentu. Jeśli użytkownik nie ma uprawnień, jest przekierowywany do `/login`.
-5.  **Interceptor Axios (Response):** Jeśli API odpowie błędem `401 Unauthorized` (token wygasł), interceptor automatycznie usuwa token z `localStorage` i przekierowuje użytkownika do `/login`.
+1.  **Logowanie:** Token JWT jest zapisywany w `localStorage`.
+2.  **`AuthContext`:** Zarządza stanem (`user`, `isAuthenticated`) i weryfikuje token przy starcie (`GET /api/auth/me`).
+3.  **Interceptor Axios (Request):** Przed *każdym* żądaniem, automatycznie dodaje token do nagłówka `Authorization: Bearer <token>`.
+4.  **Interceptor Axios (Response):** W przypadku błędu `401 Unauthorized` (wygasły token), automatycznie usuwa token i przekierowuje użytkownika do `/login`.
 
 ---
 
@@ -77,12 +52,11 @@ Aplikacja wykorzystuje przepływ oparty na `AuthContext` i interceptorach Axios,
 
 | Technologia | Zastosowanie |
 | :--- | :--- |
-| **React** | Budowa komponentowego interfejsu użytkownika (UI). |
-| **Vite** | Narzędzie do szybkiego budowania i serwera deweloperskiego. |
-| **Tailwind CSS** | Framework CSS (utility-first) do szybkiego stylowania. |
-| **React Router** | Obsługa tras (routing) i nawigacja po stronie. |
-| **Axios** | Komunikacja z API (interceptory zapytań i odpowiedzi). |
-| **Context API** | Globalne zarządzanie stanem uwierzytelnienia (`AuthContext`). |
+| **React, Vite** | Budowa i narzędzia deweloperskie dla SPA. |
+| **Tailwind CSS** | Framework CSS do szybkiego, responsywnego stylowania. |
+| **React Router** | Obsługa tras, nawigacji i tras chronionych. |
+| **Axios** | Klient HTTP z globalnym zarządzaniem tokenami (Interceptory). |
+| **Context API** | Globalne zarządzanie stanem (Auth, Cart). |
 | **Lucide Icons** | Zestaw ikon SVG. |
 
 ---
@@ -126,17 +100,16 @@ Struktura projektu została zorganizowana z podziałem na logikę (services, con
 
 ```
 src/
-├── assets/         # Obrazki, pliki statyczne
-├── components/     # Komponenty globalne (Navbar, Footer)
+├── assets/         # Pliki statyczne (ikony, obrazki)
+├── components/     # Komponenty globalne (Navbar, Footer, ScrollToTop)
 │   └── routes/     # Strażnicy tras (ProtectedRoute, OwnerRoute)
-├── context/        # Globalny stan (AuthContext.jsx)
-├── pages/          # Główne widoki/strony (Home, Login, Account)
-│   └── admin/      # Widoki panelu admina (Products, Categories)
-│       └── components/ # Komponenty admina (CategoryView, ProductEdit)
-├── services/       # Logika biznesowa i API
-│   ├── api.js      # Centralna konfiguracja Axios (interceptory)
-│   └── authService.js # Funkcje logowania/rejestracji
-├── App.jsx         # Główny router aplikacji (React Router)
-├── main.jsx        # Punkt wejścia aplikacji
-└── index.css       # Style globalne Tailwind
+├── context/        # Globalne stany (AuthContext, CartContext)
+├── pages/          # Widoki i strony (Home, Login, Publiczne Katalogi)
+│   ├── account/    # Strefa użytkownika (ProfileDetails, OrdersList)
+│   └── admin/      # Panel administracyjny
+│       └── components/ # Komponenty CRUD dla admina (ProductEdit, CategoryView)
+├── services/       # Logika biznesowa i API Clients
+│   └── api.js      # Centralna konfiguracja Axios (interceptory)
+├── App.jsx         # Główny router aplikacji
+└── main.jsx        # Punkt wejścia aplikacji
 ```
