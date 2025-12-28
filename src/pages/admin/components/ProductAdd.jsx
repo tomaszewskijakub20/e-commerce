@@ -78,12 +78,10 @@ export default function ProductAdd() {
     const [formData, setFormData] = useState({
         name: "",
         seoSlug: "",
-        sku: null,
+        sku: "",
         shortDescription: "",
         description: "",
         price: "",
-        shippingCost: "0.00",
-        estimatedDeliveryTime: "2-3 dni",
         isActive: true,
         isFeatured: false,
         categoryId: "",
@@ -104,16 +102,10 @@ export default function ProductAdd() {
     // Stan kontrolujący zmiany
     const [isDirty, setIsDirty] = useState(false);
 
-    const canManage = user?.role === 'owner';
+    const canManage = user?.roles?.includes('ROLE_OWNER') || user?.role === 'owner';
 
     // Pobieranie kategorii
     useEffect(() => {
-        if (!canManage) {
-            setError("Brak uprawnień do dodawania produktów.");
-            setLoadingCategories(false);
-            return;
-        }
-
         const loadCategories = async () => {
             try {
                 setLoadingCategories(true);
@@ -126,7 +118,7 @@ export default function ProductAdd() {
             }
         };
         loadCategories();
-    }, [canManage]);
+    }, []);
 
     // Pobieranie atrybutów po zmianie kategorii
     useEffect(() => {
@@ -160,7 +152,7 @@ export default function ProductAdd() {
                 categoriesList.forEach(category => {
                     result.push({
                         ...category,
-                        displayName: '  '.repeat(level) + category.name
+                        displayName: '\u00A0\u00A0'.repeat(level) + (level > 0 ? '↳ ' : '') + category.name
                     });
                     if (category.children && category.children.length > 0) {
                         result = result.concat(flatten(category.children, level + 1));
@@ -175,9 +167,9 @@ export default function ProductAdd() {
     // Obsługa zmiany standardowych pól i generowanie slug
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
+        setIsDirty(true);
 
         if (name === 'name') {
-            // Logika generowania slug
             const slug = value.toLowerCase().trim()
                 .replace(/ł/g, 'l').replace(/ą/g, 'a').replace(/ę/g, 'e')
                 .replace(/ś/g, 's').replace(/ć/g, 'c').replace(/ż/g, 'z')
@@ -186,11 +178,10 @@ export default function ProductAdd() {
 
             setFormData(prev => ({ ...prev, name: value, seoSlug: slug }));
         } else {
-            const finalValue = (name === 'sku' && value.trim() === '') ? null : value;
+            const finalValue = (name === 'sku' && value.trim() === '') ? "" : value;
             setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : finalValue }));
         }
         setError("");
-        setIsDirty(true); // Oznacz jako zmienione
     };
 
     // Zapobieganie wprowadzeniu minusów/E w polach numerycznych
@@ -209,7 +200,7 @@ export default function ProductAdd() {
                 [attributeId]: value
             }
         }));
-        setIsDirty(true); // Oznacz jako zmienione
+        setIsDirty(true);
     };
 
     // Obsługa dodawania nowych zdjęć
@@ -219,9 +210,9 @@ export default function ProductAdd() {
             setNewImages(prev => [...prev, ...files]);
             const newPreviews = files.map(file => URL.createObjectURL(file));
             setImagePreviews(prev => [...prev, ...newPreviews]);
+            setIsDirty(true);
         }
         if (fileInputRef.current) fileInputRef.current.value = "";
-        setIsDirty(true); // Oznacz jako zmienione
     };
 
     // Usuwanie zdjęcia z kolejki do uploadu
@@ -231,39 +222,32 @@ export default function ProductAdd() {
             URL.revokeObjectURL(prev[index]);
             return prev.filter((_, i) => i !== index);
         });
-        setIsDirty(true); // Oznacz jako zmienione
+        setIsDirty(true);
     };
 
-    // Otwiera modal anulowania (jeśli są zmiany)
     const handleCancelClick = () => {
-        setShowCancelModal(true);
+        if (isDirty) setShowCancelModal(true);
+        else navigate('/admin/products');
     };
 
-    // Potwierdzenie anulowania i powrót do listy
     const confirmCancel = () => {
         setShowCancelModal(false);
-        // Zwolnienie pamięci zajmowanej przez podglądy
         imagePreviews.forEach(URL.revokeObjectURL);
         setNewImages([]);
         setImagePreviews([]);
         navigate('/admin/products');
     };
 
-    // Walidacja i otwarcie modala przed zapisem
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!canManage) {
-            setError("Brak uprawnień.");
+            setError("Brak uprawnień do wykonania tej akcji.");
             return;
         }
 
-        if (!formData.name || !formData.categoryId || parseFloat(formData.price) <= 0) {
-            setError("Wypełnij wymagane pola (Nazwa, Kategoria, Cena > 0).");
-            return;
-        }
-
-        if (parseFloat(formData.price) < 0 || parseFloat(formData.shippingCost) < 0) {
-            setError("Ceny nie mogą być ujemne.");
+        if (!formData.name || !formData.categoryId || !formData.price || !formData.description) {
+            setError("Wypełnij wymagane pola: Nazwa, Kategoria, Cena oraz Pełny opis.");
+            window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
         }
 
@@ -271,116 +255,77 @@ export default function ProductAdd() {
         setShowSaveConfirmModal(true);
     };
 
-    // Właściwa akcja tworzenia produktu i uploadu zdjęć
+    // Właściwa akcja tworzenia produktu
     const confirmSubmit = async () => {
         setShowSaveConfirmModal(false);
         setSubmitting(true);
         setError("");
 
         try {
-            // Przygotowanie danych produktu
             const attributeValuesPayload = categoryAttributes
-                .map(attrDef => {
-                    const formValue = formData.attributeValues[attrDef.id];
-
-                    let finalValue = (formValue === null || formValue === undefined || (typeof formValue === 'string' && formValue.trim() === ''))
-                        ? ""
-                        : formValue;
-
-                    return {
-                        attributeId: attrDef.attributeId,
-                        value: finalValue
-                    };
+                .filter(attrDef => {
+                    const val = formData.attributeValues[attrDef.id];
+                    return val !== undefined && val !== null && String(val).trim() !== "";
                 })
-                .filter(attr => attr.value !== null && attr.value !== "");
-
-            const finalSku = (formData.sku && formData.sku.trim() !== '') ? formData.sku.trim() : null;
+                .map(attrDef => ({
+                    productId: 0,
+                    attributeId: parseInt(attrDef.attributeId),
+                    attributeValue: String(formData.attributeValues[attrDef.id]).trim()
+                }));
 
             const productCreatePayload = {
-                name: formData.name,
-                seoSlug: formData.seoSlug,
-                sku: finalSku,
-                description: formData.description,
-                shortDescription: formData.shortDescription,
+                name: formData.name.trim(),
+                description: formData.description.trim(),
+                shortDescription: formData.shortDescription.trim() || "",
                 price: parseFloat(formData.price),
-                vatRate: 0.0,
-                shippingCost: parseFloat(formData.shippingCost),
-                estimatedDeliveryTime: formData.estimatedDeliveryTime,
-                isActive: formData.isActive,
-                isFeatured: formData.isFeatured,
+                vatRate: 23.0,
+                shippingCost: 20.0,
+                estimatedDeliveryTime: "3-5 dni",
+                seoSlug: formData.seoSlug.trim(),
+                sku: formData.sku?.trim() || null,
                 categoryId: parseInt(formData.categoryId),
-                attributeValues: attributeValuesPayload,
+                isFeatured: formData.isFeatured || false,
+                isActive: true,
+                attributeValues: attributeValuesPayload
             };
 
-            // Wyślij produkt
             const response = await api.post('/products', productCreatePayload);
             const newProductId = response.data.id;
 
-            if (!newProductId) throw new Error("API nie zwróciło ID nowego produktu.");
-
-            // Wyślij zdjęcia
+            // Obsługa zdjęć (jeśli są)
             if (newImages.length > 0) {
-                const firstImageFile = newImages[0];
-                const remainingImages = newImages.slice(1);
-                let mainImageId = null;
-
-                // Upload pierwszego zdjęcia (i ustawienie jako miniaturka)
-                const firstImageFormData = new FormData();
-                firstImageFormData.append('file', firstImageFile);
-
-                try {
-                    const uploadResponse = await api.post(`/products/${newProductId}/images`, firstImageFormData, {
-                        headers: { 'Content-Type': 'multipart/form-data' }
-                    });
-
-                    mainImageId = uploadResponse.data.id;
-
-                    if (mainImageId) {
-                        await api.post(`/products/${newProductId}/images/${mainImageId}/thumbnail`);
+                for (let i = 0; i < newImages.length; i++) {
+                    const imgFormData = new FormData();
+                    imgFormData.append('file', newImages[i]);
+                    try {
+                        const uploadRes = await api.post(`/products/${newProductId}/images`, imgFormData, {
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                        });
+                        if (i === 0 && uploadRes.data?.id) {
+                            await api.post(`/products/${newProductId}/images/${uploadRes.data.id}/thumbnail`);
+                        }
+                    } catch (imgErr) {
+                        console.error("Błąd uploadu zdjęcia:", imgErr);
                     }
-                } catch (uploadErr) {
-                    console.warn("Błąd podczas wgrywania pierwszego zdjęcia lub ustawiania miniatury:", uploadErr);
                 }
-
-                // Upload pozostałych zdjęć
-                const uploadPromises = remainingImages.map(file => {
-                    const imageFormData = new FormData();
-                    imageFormData.append('file', file);
-                    return api.post(`/products/${newProductId}/images`, imageFormData, {
-                        headers: { 'Content-Type': 'multipart/form-data' }
-                    });
-                });
-
-                await Promise.all(uploadPromises);
             }
 
-            setSubmitting(false);
-
-            // 4. Przekieruj do edycji nowo utworzonego produktu
-            navigate(`/admin/products/${newProductId}/edit`, { state: { successMessage: "Produkt utworzony pomyślnie. Możesz kontynuować edycję." } });
+            setIsDirty(false);
+            navigate(`/admin/products`, { state: { successMessage: "Produkt utworzony pomyślnie!" } });
 
         } catch (err) {
-            console.error("Błąd zapisu:", err.response);
-            if (err.response?.status === 401) {
-                setError("Sesja wygasła. Zaloguj się ponownie.");
-                logout();
-                navigate('/login');
-                return;
-            }
+            console.error("Błąd API (szczegóły):", err.response?.data);
+            const serverMessage = err.response?.data?.message;
+            const validationErrors = err.response?.data?.errors;
 
-            let errorMessage = "Błąd podczas tworzenia produktu.";
-            if (err.response?.data?.details) {
-                errorMessage = err.response.data.details.map(d => `${d.field}: ${d.message}`).join(", ");
-            } else if (err.response?.data?.message) {
-                errorMessage = err.response.data.message;
-            }
+            setError(serverMessage || "Błąd serwera podczas tworzenia produktu.");
 
-            setError(errorMessage);
+            if (validationErrors) {
+                console.log("Błędy walidacji z serwera:", validationErrors);
+            }
             setSubmitting(false);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
-
 
     if (loadingCategories) {
         return (
@@ -407,11 +352,13 @@ export default function ProductAdd() {
                     <h1 className="text-3xl font-bold text-gray-900">Dodaj nowy produkt</h1>
                 </div>
 
-                {/* Komunikat o błędzie */}
                 {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 flex items-center justify-between">
-                        <span>{error}</span>
-                        <X className="h-5 w-5 cursor-pointer" onClick={() => setError("")} />
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 flex items-center justify-between shadow-sm">
+                        <div className="flex items-center">
+                            <XCircle className="h-5 w-5 mr-2" />
+                            <span>{error}</span>
+                        </div>
+                        <X className="h-5 w-5 cursor-pointer hover:text-red-900" onClick={() => setError("")} />
                     </div>
                 )}
 
@@ -433,72 +380,51 @@ export default function ProductAdd() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Adres internetowy (Slug) *</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Adres internetowy (Slug)</label>
                                 <input
                                     type="text" name="seoSlug" value={formData.seoSlug} onChange={handleChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black font-mono"
-                                    required
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black font-mono text-sm bg-gray-50"
                                     disabled={submitting}
                                 />
-                                <p className="mt-1 text-xs text-gray-500">Link używany w adresie URL produktu. Generowany automatycznie.</p>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">SKU (Kod produktu)</label>
                                 <input
                                     type="text" name="sku" value={formData.sku || ''} onChange={handleChange}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
-                                    placeholder="Opcjonalny unikalny numer inwentarzowy (SKU)"
+                                    placeholder="Pozostaw puste dla auto-generacji"
                                     disabled={submitting}
                                 />
-                                <p className="mt-1 text-xs text-gray-500">Jeśli pozostawisz pole puste, SKU zostanie wygenerowany automatycznie przez system.</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Opisy</label>
                                 <textarea
                                     name="shortDescription" value={formData.shortDescription} onChange={handleChange}
-                                    rows="2" placeholder="Krótki opis, widoczny np. na listach produktów..."
+                                    rows="2" placeholder="Krótki opis na listę produktów..."
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-black"
                                     maxLength="255"
                                     disabled={submitting}
                                 ></textarea>
                                 <textarea
                                     name="description" value={formData.description} onChange={handleChange}
-                                    rows="4" placeholder="Pełny opis produktu (szczegóły, specyfikacja)..."
+                                    rows="5" placeholder="Pełny opis produktu (wymagany)..."
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+                                    required
                                     disabled={submitting}
                                 ></textarea>
                             </div>
                         </div>
 
-                        {/* Ceny i Logistyka */}
+                        {/* Ceny i Kategoria */}
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4">Finanse i Logistyka</h2>
+                            <h2 className="text-xl font-bold text-gray-900 mb-4">Cena i Kategoria</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Cena (PLN) *</label>
                                     <input
                                         type="number" name="price" value={formData.price} onChange={handleChange}
                                         onKeyDown={handlePriceKeyDown}
-                                        step="0.01" min="0" required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
-                                        disabled={submitting}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Wysyłka (PLN) *</label>
-                                    <input
-                                        type="number" name="shippingCost" value={formData.shippingCost} onChange={handleChange}
-                                        onKeyDown={handlePriceKeyDown}
-                                        step="0.01" min="0" required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
-                                        disabled={submitting}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Czas dostawy *</label>
-                                    <input
-                                        type="text" name="estimatedDeliveryTime" value={formData.estimatedDeliveryTime} onChange={handleChange}
-                                        required
+                                        step="0.01" min="0.01" required
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
                                         disabled={submitting}
                                     />
@@ -520,44 +446,49 @@ export default function ProductAdd() {
                             </div>
                         </div>
 
-                        {/* Atrybuty */}
-                        {loadingAttributes ? (
-                            <div className="p-6 text-center text-gray-500 bg-white rounded-lg shadow-sm border border-gray-200"><Loader className="inline h-5 w-5 animate-spin" /> Ładowanie atrybutów...</div>
-                        ) : categoryAttributes.length > 0 && (
+                        {/* Atrybuty dynamiczne */}
+                        {formData.categoryId && (
                             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                                <h2 className="text-xl font-bold text-gray-900 mb-4">Atrybuty</h2>
-                                <div className="space-y-4">
-                                    {categoryAttributes.map(attr => (
-                                        <div key={attr.id}>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                {attr.attributeName || attr.name}
-                                                {attr.attributeType && <span className="text-xs text-gray-400 ml-1">({attr.attributeType})</span>}
-                                            </label>
-
-                                            {attr.attributeType === 'BOOLEAN' ? (
-                                                <select
-                                                    value={formData.attributeValues[attr.id] || ''}
-                                                    onChange={(e) => handleAttributeChange(attr.id, e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white"
-                                                    disabled={submitting}
-                                                >
-                                                    <option value="">Wybierz...</option>
-                                                    <option value="true">Tak</option>
-                                                    <option value="false">Nie</option>
-                                                </select>
-                                            ) : (
-                                                <input
-                                                    type={attr.attributeType === 'NUMBER' ? 'number' : 'text'}
-                                                    value={formData.attributeValues[attr.id] || ''}
-                                                    onChange={(e) => handleAttributeChange(attr.id, e.target.value)}
-                                                    placeholder={attr.attributeType === 'NUMBER' ? '0' : `Wpisz wartość`}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
-                                                    disabled={submitting}
-                                                />
-                                            )}
-                                        </div>
-                                    ))}
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 className="text-xl font-bold text-gray-900">Specyfikacja kategorii</h2>
+                                    {loadingAttributes && <Loader className="h-5 w-5 animate-spin text-gray-400" />}
                                 </div>
+                                {categoryAttributes.length > 0 ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {categoryAttributes.map(attr => (
+                                            <div key={attr.id}>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    {attr.attributeName}
+                                                    {attr.isKeyAttribute && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full uppercase">Kluczowy</span>}
+                                                </label>
+
+                                                {attr.attributeType === 'BOOLEAN' ? (
+                                                    <select
+                                                        value={formData.attributeValues[attr.id] || ''}
+                                                        onChange={(e) => handleAttributeChange(attr.id, e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-black"
+                                                        disabled={submitting}
+                                                    >
+                                                        <option value="">Wybierz...</option>
+                                                        <option value="true">Tak</option>
+                                                        <option value="false">Nie</option>
+                                                    </select>
+                                                ) : (
+                                                    <input
+                                                        type={attr.attributeType === 'NUMBER' ? 'number' : 'text'}
+                                                        value={formData.attributeValues[attr.id] || ''}
+                                                        onChange={(e) => handleAttributeChange(attr.id, e.target.value)}
+                                                        placeholder={`Wpisz ${attr.attributeName.toLowerCase()}...`}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+                                                        disabled={submitting}
+                                                    />
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : !loadingAttributes && (
+                                    <p className="text-sm text-gray-500 italic">Brak dodatkowych atrybutów dla tej kategorii.</p>
+                                )}
                             </div>
                         )}
                     </div>
@@ -567,29 +498,30 @@ export default function ProductAdd() {
 
                         {/* Status */}
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
-                            <h3 className="text-lg font-bold text-gray-900">Status</h3>
-
+                            <h3 className="text-lg font-bold text-gray-900">Ustawienia</h3>
                             <div className="flex items-center justify-between">
-                                <label htmlFor="isFeatured" className="cursor-pointer">Polecany (Featured)</label>
-                                <input type="checkbox" name="isFeatured" id="isFeatured" checked={formData.isFeatured} onChange={handleChange} className="h-5 w-5 text-black rounded focus:ring-black border-gray-300" disabled={submitting} />
+                                <label htmlFor="isFeatured" className="text-sm font-medium text-gray-700">Wyróżnij produkt</label>
+                                <input
+                                    type="checkbox" name="isFeatured" id="isFeatured"
+                                    checked={formData.isFeatured} onChange={handleChange}
+                                    className="h-5 w-5 text-black rounded focus:ring-black border-gray-300"
+                                    disabled={submitting}
+                                />
                             </div>
-
                             <div className="flex items-center justify-between">
-                                <label htmlFor="isActive" className="cursor-not-allowed text-gray-500">Aktywny w sklepie</label>
-                                <input type="checkbox" name="isActive" id="isActive" checked={formData.isActive} disabled className="h-5 w-5 text-black rounded focus:ring-black border-gray-300" />
+                                <span className="text-sm font-medium text-gray-400">Aktywny w sklepie</span>
+                                <CheckCircle className="h-5 w-5 text-green-500" />
                             </div>
-                            <p className="text-xs text-gray-500">Aktywność jest domyślnie ustawiona na 'Tak' po utworzeniu.</p>
                         </div>
 
                         {/* Zdjęcia */}
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                             <h3 className="text-lg font-bold text-gray-900 mb-4">Zdjęcia</h3>
-
                             {imagePreviews.length > 0 && (
                                 <div className="grid grid-cols-2 gap-2 mb-4">
                                     {imagePreviews.map((src, idx) => (
-                                        <div key={idx} className="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                                            <img src={src} alt="Preview" className="w-full h-full object-cover" />
+                                        <div key={idx} className="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden border">
+                                            <img src={src} alt="Podgląd" className="w-full h-full object-cover" />
                                             <button
                                                 type="button"
                                                 onClick={() => removeNewImage(idx)}
@@ -599,7 +531,7 @@ export default function ProductAdd() {
                                                 <X className="h-3 w-3" />
                                             </button>
                                             {idx === 0 && (
-                                                <span className="absolute bottom-1 left-1 text-xs bg-black/70 text-white px-2 py-0.5 rounded-full">Miniaturka</span>
+                                                <span className="absolute bottom-0 left-0 right-0 text-[10px] bg-black/70 text-white text-center py-0.5">Główne</span>
                                             )}
                                         </div>
                                     ))}
@@ -618,29 +550,27 @@ export default function ProductAdd() {
                                 disabled={submitting}
                             >
                                 <UploadCloud className="h-5 w-5" />
-                                <span>Wybierz zdjęcia</span>
+                                <span>Wgraj zdjęcia</span>
                             </button>
-                            <p className="text-xs text-gray-500 mt-2 text-center">Pierwsze zdjęcie zostanie użyte jako miniaturka. Zdjęcia zostaną wysłane po kliknięciu "Utwórz produkt".</p>
                         </div>
 
                         {/* Akcje */}
-                        <div className="flex justify-end space-x-4">
+                        <div className="flex flex-col space-y-3">
+                            <button
+                                type="submit"
+                                className="w-full py-3 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center justify-center space-x-2 font-bold transition-colors disabled:opacity-50"
+                                disabled={submitting}
+                            >
+                                {submitting ? <Loader className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                                <span>{submitting ? 'Zapisywanie...' : 'Utwórz produkt'}</span>
+                            </button>
                             <button
                                 type="button"
                                 onClick={handleCancelClick}
-                                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                                className="w-full py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
                                 disabled={submitting}
                             >
                                 Anuluj
-                            </button>
-                            <button
-                                type="submit"
-                                className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center space-x-2"
-                                disabled={submitting}
-                            >
-                                {submitting && <Loader className="h-4 w-4 animate-spin" />}
-                                <span>{submitting ? 'Zapisywanie...' : 'Utwórz produkt'}</span>
-                                {!submitting && <Save className="h-4 w-4" />}
                             </button>
                         </div>
 
@@ -653,28 +583,23 @@ export default function ProductAdd() {
                 show={showSaveConfirmModal}
                 onClose={() => setShowSaveConfirmModal(false)}
                 onConfirm={confirmSubmit}
-                title="Potwierdź utworzenie produktu"
-                message={`Czy na pewno chcesz utworzyć nowy produkt "${formData.name}"? Zdjęcia zostaną wgrane i produkt zostanie aktywowany w sklepie.`}
-                confirmText="Utwórz i opublikuj"
-                cancelText="Wróć do formularza"
+                title="Potwierdź utworzenie"
+                message={`Czy na pewno chcesz utworzyć produkt "${formData.name}"?`}
                 type="success"
+                confirmText="Tak, zapisz"
                 isProcessing={submitting}
             />
 
-            {/* Modal anulowania (Używa isDirty) */}
+            {/* Modal anulowania */}
             <ConfirmationModal
                 show={showCancelModal}
                 onClose={() => setShowCancelModal(false)}
                 onConfirm={confirmCancel}
-                title={isDirty ? "Niezapisane zmiany" : "Potwierdź opuszczenie strony"}
-                message={isDirty
-                    ? "Czy na pewno chcesz opuścić tę stronę? Wprowadzone niezapisane dane i wybrane zdjęcia zostaną trwale utracone."
-                    : "Czy na pewno chcesz wrócić do listy produktów?"
-                }
+                title="Niezapisane zmiany"
+                message="Wszystkie wprowadzone dane i zdjęcia zostaną utracone. Czy na pewno chcesz wyjść?"
+                type="warning"
                 confirmText="Opuść stronę"
                 cancelText="Zostań"
-                type={isDirty ? "warning" : "info"}
-                isProcessing={submitting}
             />
         </div>
     );

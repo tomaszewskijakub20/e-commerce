@@ -4,12 +4,24 @@ import { orderService } from '../../services/orderService';
 import { Loader, ShoppingBag, Calendar, CheckCircle } from 'lucide-react';
 
 export default function OrdersList() {
-    const { userData, orderStatusMap } = useOutletContext();
-    
+    const { userData } = useOutletContext();
+
     const [userOrders, setUserOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
     const [ordersError, setOrdersError] = useState(null);
-    
+
+    // Mapa tłumaczeń statusów zamówienia
+    const orderStatusMap = {
+        'NEW': 'Nowe',
+        'CONFIRMED': 'Potwierdzone',
+        'PROCESSING': 'W trakcie realizacji',
+        'SHIPPED': 'Wysłane',
+        'DELIVERED': 'Dostarczone',
+        'CANCELLED': 'Anulowane',
+        'REFUNDED': 'Zwrócona płatność',
+        'DEFAULT': 'Nieznany',
+    };
+
     // Funkcja formatująca cenę
     const formatPrice = (price) => {
         return new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(price || 0);
@@ -19,17 +31,18 @@ export default function OrdersList() {
     const getStatusStyle = (status) => {
         switch (status) {
             case 'DELIVERED':
-            case 'COMPLETED': return 'bg-green-100 text-green-800';
-            case 'SHIPPED': return 'bg-blue-100 text-blue-800';
-            case 'NEW':
-            case 'CONFIRMED': return 'bg-yellow-100 text-yellow-800';
+            case 'COMPLETED': return 'bg-green-100 border-green-300 text-green-800';
+            case 'SHIPPED': return 'bg-blue-100 border-blue-300 text-blue-800';
+            case 'CONFIRMED': return 'bg-indigo-100 border-indigo-300 text-indigo-800';
+            case 'NEW': return 'bg-yellow-100 border-yellow-300 text-yellow-800';
             case 'CANCELLED':
-            case 'FAILED': return 'bg-red-100 text-red-800';
-            case 'PENDING': return 'bg-orange-100 text-orange-800';
-            default: return 'bg-gray-100 text-gray-600';
+            case 'FAILED': return 'bg-red-100 border-red-300 text-red-800';
+            case 'REFUNDED': return 'bg-purple-100 border-purple-300 text-purple-800';
+            case 'PROCESSING': return 'bg-orange-100 border-orange-300 text-orange-800';
+            default: return 'bg-gray-100 border-gray-300 text-gray-600';
         }
     };
-    
+
     // Funkcja tłumacząca status zamówienia
     const translateStatus = (status) => {
         return orderStatusMap[status] || orderStatusMap['DEFAULT'];
@@ -37,7 +50,7 @@ export default function OrdersList() {
 
     // Funkcja pobierająca listę zamówień użytkownika
     const loadUserOrders = useCallback(async () => {
-        const userId = userData.id; 
+        const userId = userData.id;
         setOrdersLoading(true);
         setOrdersError(null);
 
@@ -48,7 +61,7 @@ export default function OrdersList() {
 
         try {
             const responseData = await orderService.getMyOrders(userId);
-            
+
             const ordersFromContent = responseData && responseData.content
                 ? responseData.content
                 : responseData;
@@ -69,7 +82,7 @@ export default function OrdersList() {
             setOrdersLoading(false);
         }
     }, [userData.id]);
-    
+
     useEffect(() => {
         if (userData.id) loadUserOrders();
     }, [userData.id, loadUserOrders]);
@@ -80,7 +93,7 @@ export default function OrdersList() {
             {ordersLoading && (
                 <div className="text-center py-12"><Loader className="h-6 w-6 animate-spin mx-auto text-gray-600" /></div>
             )}
-            
+
             {ordersError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
                     {ordersError}
@@ -94,7 +107,7 @@ export default function OrdersList() {
                     <p className="text-sm text-gray-400">Tutaj pojawią się Twoje zamówienia po złożeniu.</p>
                 </div>
             )}
-            
+
             {!ordersLoading && userOrders.length > 0 && (
                 <div className="space-y-4">
                     {userOrders.map(order => (
@@ -123,7 +136,7 @@ export default function OrdersList() {
                             </div>
 
                             <div className="ml-4 flex-shrink-0">
-                                <Link 
+                                <Link
                                     to={`/account/orders/${order.id}`}
                                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                                 >

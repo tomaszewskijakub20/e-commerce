@@ -469,9 +469,10 @@ export default function Checkout() {
             return;
         }
         if (!isTermsAccepted) {
-            setError("Musisz zaakceptować Regulamin i Politykę Prywatności, aby złożyć zamówienie.");
+            setError("Musisz zaakceptować Regulamin i Politykę Prywatności.");
             return;
         }
+        // Sprawdzamy kwotę z serwera
         if (!checkoutData.serverTotalAmount) {
             setError("Brak kwoty zamówienia z serwera. Wróć do Kroku 1.");
             return;
@@ -479,63 +480,43 @@ export default function Checkout() {
 
         setLoading(true);
         setError(null);
-        setSuccess(null);
 
         try {
-            const isCOD = checkoutData.selectedPaymentMethod === 'CASH_ON_DELIVERY';
-            const finalAmount = parseFloat(checkoutData.serverTotalAmount).toFixed(2);
+            const finalAmount = parseFloat(checkoutData.serverTotalAmount);
 
-            if (isCOD) {
-                // Logika dla Płatności przy Odbiorze
-                const paymentPayload = {
-                    orderId: checkoutData.orderId,
-                    amount: parseFloat(finalAmount),
-                    method: 'CASH_ON_DELIVERY',
-                    transactionId: `COD-${Date.now()}-${Math.floor(Math.random() * 999)}`,
-                    notes: `Płatność za zamówienie #${checkoutData.orderId} - Oczekuje przy odbiorze.`,
-                };
+            // Wspólny obiekt payload dla obu ścieżek
+            const basePaymentPayload = {
+                orderId: checkoutData.orderId,
+                amount: finalAmount, // Kwota z wliczoną dostawą
+                method: checkoutData.selectedPaymentMethod,
+                transactionId: `${checkoutData.selectedPaymentMethod === 'CASH_ON_DELIVERY' ? 'COD' : 'TXN'}-${Date.now()}`,
+                notes: `Płatność za zamówienie #${checkoutData.orderId}`,
+            };
 
-                await paymentService.createPayment(paymentPayload);
+            const paymentResponse = await paymentService.createPayment(basePaymentPayload);
 
-                setSuccess(`Twoje zamówienie zostało złożone, płatność przy odbiorze (${formatPrice(finalAmount)}).`);
+            if (checkoutData.selectedPaymentMethod === 'CASH_ON_DELIVERY') {
+                setSuccess(`Zamówienie złożone. Do zapłaty przy odbiorze: ${formatPrice(finalAmount)}`);
                 clearCart();
                 setStep(3);
                 setLoading(false);
                 return;
             }
 
-            // Inicjacja Płatności Online
-            const paymentPayload = {
-                orderId: checkoutData.orderId,
-                amount: parseFloat(finalAmount),
-                method: checkoutData.selectedPaymentMethod,
-                transactionId: `TXN-INIT-${Date.now()}-${Math.floor(Math.random() * 999)}`,
-                notes: `Płatność za zamówienie #${checkoutData.orderId} - Inicjacja`,
-            };
-
-            const paymentResponse = await paymentService.createPayment(paymentPayload);
-            const paymentId = paymentResponse.id;
-
-            // Symulacja Bramki Płatniczej
-            const simulateResponse = await paymentService.simulatePayment(paymentId, PAYMENT_MOCK_SCENARIO);
+            // Symulacja Bramki Płatniczej (dla płatności online)
+            const simulateResponse = await paymentService.simulatePayment(paymentResponse.id, PAYMENT_MOCK_SCENARIO);
 
             if (simulateResponse.status === 'COMPLETED') {
-                setSuccess(`Twoje zamówienie zostało pomyślnie złożone i opłacone (${formatPrice(finalAmount)}).`);
+                setSuccess(`Opłacono pomyślnie: ${formatPrice(finalAmount)}`);
                 clearCart();
-                setStep(3); // Krok 3: Sukces
+                setStep(3);
             } else {
-                setError(`Płatność nie powiodła się. Status: ${simulateResponse.status}. Spróbuj inną metodą.`);
+                setError(`Płatność odrzucona. Status: ${simulateResponse.status}.`);
             }
 
         } catch (err) {
             console.error("Błąd płatności:", err.response || err);
-            let errMsg = "Wystąpił błąd podczas przetwarzania płatności.";
-            if (err.response?.status === 400 && err.response?.data?.details) {
-                errMsg = `Błąd walidacji: ${err.response.data.details.map(d => d.message).join(', ')}`;
-            } else if (err.response?.data?.message) {
-                errMsg = err.response.data.message;
-            }
-            setError(errMsg);
+            setError(err.response?.data?.message || "Wystąpił błąd podczas płatności.");
         } finally {
             setLoading(false);
         }
@@ -733,7 +714,7 @@ export default function Checkout() {
                                 <span className="font-medium">
                                     {shippingCost === 0.00 && subtotal > 0 ? (
                                         <>
-                                            <span className="line-through text-gray-500 mr-2">{formatPrice(29.99)}</span>
+                                            <span className="line-through text-gray-500 mr-2">{formatPrice(20.00)}</span>
                                             <span className="text-green-600">DARMOWA</span>
                                         </>
                                     ) : (

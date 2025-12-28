@@ -130,7 +130,7 @@ export default function Cart() {
                                     {/* Wyświetlanie przekreślonej ceny dla darmowej wysyłki */}
                                     {shippingCost === 0.00 && subtotal > 0 ? (
                                         <>
-                                            <span className="line-through text-gray-500 mr-2">{formatPrice(29.99)}</span>
+                                            <span className="line-through text-gray-500 mr-2">{formatPrice(20.00)}</span>
                                             <span className="text-green-600">DARMOWA</span>
                                         </>
                                     ) : (

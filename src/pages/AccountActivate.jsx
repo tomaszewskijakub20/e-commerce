@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
-import { Loader, XCircle, CheckCircle2, Mail, ArrowLeft, LogIn } from 'lucide-react';
+import { Loader, XCircle, CheckCircle2, Mail, ArrowLeft, LogIn, RefreshCcw } from 'lucide-react';
 import api from '../services/api';
 
-const AUTO_REDIRECT_DELAY = 3000; // 3 sekundy
+const AUTO_REDIRECT_DELAY = 4000;
 
 export default function AccountActivate() {
     const [searchParams] = useSearchParams();
@@ -21,49 +21,38 @@ export default function AccountActivate() {
     useEffect(() => {
         if (!token) {
             setStatus('error');
-            setMessage('Brak wymaganego tokena aktywacyjnego. Prosimy o sprawdzenie poprawności linku.');
+            setMessage('Brak tokena aktywacyjnego. Sprawdź, czy link w wiadomości e-mail jest kompletny.');
             return;
         }
 
         const activateAccount = async () => {
             try {
-                // Wywołanie endpointu aktywacji konta
-                const response = await api.post(`/auth/activate?token=${token}`);
+                // GET /api/auth/activate?token=...
+                await api.post(`/auth/activate?token=${token}`);
 
                 setStatus('success');
-                setMessage('Konto zostało pomyślnie aktywowane. Zostaniesz automatycznie przekierowany do strony logowania.');
+                setMessage('Konto zostało pomyślnie aktywowane! Za chwilę zostaniesz przekierowany do strony logowania.');
 
-                // Automatyczne przekierowanie
                 setTimeout(() => {
-                    navigate('/login', { state: { message: 'Konto aktywowane! Możesz się zalogować.' } });
+                    navigate('/login', { state: { message: 'Konto aktywne! Możesz się zalogować.' } });
                 }, AUTO_REDIRECT_DELAY);
-
 
             } catch (err) {
                 console.error("Błąd aktywacji:", err.response || err);
-
-                let errorMessage = 'Wystąpił błąd podczas aktywacji. Prosimy o ponowną próbę.';
-
-                // Parsowanie komunikatów o błędach z API
-                if (err.response?.status === 400) {
-                    errorMessage = 'Wysłany token jest nieprawidłowy, został już wykorzystany lub jego ważność wygasła (Token jest ważny przez 15 minut).';
-                } else if (err.response?.status === 404) {
-                    errorMessage = 'Nie odnaleziono konta dla podanego tokena. Prosimy o weryfikację linku.';
-                } else if (err.response?.status === 500) {
-                    errorMessage = 'Wystąpił wewnętrzny błąd serwera. Prosimy o kontakt z obsługą lub ponowne wysłanie linku.';
-                } else if (err.response?.data?.message) {
-                    errorMessage = err.response.data.message;
-                }
-
                 setStatus('error');
-                setMessage(errorMessage);
+                
+                if (err.response?.status === 400) {
+                    setMessage('Link aktywacyjny wygasł lub jest nieprawidłowy. Tokeny są ważne przez 15 minut.');
+                } else {
+                    setMessage(err.response?.data?.message || 'Wystąpił problem podczas aktywacji konta.');
+                }
             }
         };
 
         activateAccount();
     }, [token, navigate]);
 
-    // Funkcja do ponownego wysłania linku (wykorzystuje /forgot-password do wygenerowania nowego, ważnego tokena)
+    // Ponowne wysyłanie linku aktywacyjnego
     const handleResendLink = async (e) => {
         e.preventDefault();
         if (!resendEmail) return;
@@ -72,111 +61,95 @@ export default function AccountActivate() {
         setResendSuccess(false);
 
         try {
-            // Wykorzystujemy endpoint resetowania hasła, który wygeneruje nowy, ważny token
-            await api.post('/auth/forgot-password', { email: resendEmail });
+            await api.post('/auth/resend-activation', { email: resendEmail });
 
             setResendSuccess(true);
-
+            setResendEmail(''); // Czyścimy formularz po sukcesie
         } catch (err) {
-            alert("Wystąpił błąd podczas wysyłania linku. Prosimy o sprawdzenie poprawności emaila i ponowną próbę.");
-            setResendLoading(false);
+            const errorMsg = err.response?.data?.message || "Nie udało się wysłać linku. Upewnij się, że podany e-mail jest poprawny.";
+            alert(errorMsg);
         } finally {
             setResendLoading(false);
         }
     };
 
-    const IconMap = {
-        'loading': Loader,
-        'success': CheckCircle2,
-        'error': XCircle
-    };
-
-    const StatusColor = {
-        'loading': 'text-gray-500',
-        'success': 'text-green-600',
-        'error': 'text-red-600'
-    };
-
-    const StatusBg = {
-        'loading': 'bg-gray-100',
-        'success': 'bg-green-50',
-        'error': 'bg-red-50'
-    };
-
-    const CurrentIcon = IconMap[status];
-
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12">
-            <div className="max-w-md w-full space-y-6 text-center p-6 rounded-lg shadow-xl bg-white">
-
-                <CurrentIcon
-                    className={`h-16 w-16 mx-auto ${StatusColor[status]} ${status === 'loading' ? 'animate-spin' : ''}`}
-                />
-
-                <h1 className="text-2xl font-bold text-gray-900">
-                    {status === 'loading' ? 'Aktywacja konta...' : (status === 'success' ? 'Aktywacja zakończona!' : 'Aktywacja nieudana')}
-                </h1>
-
-                <div className={`p-4 rounded-md ${StatusBg[status]} border ${StatusColor[status].replace('text-', 'border-')}`}>
-                    <p className={`font-medium ${StatusColor[status]}`}>
-                        {message}
-                    </p>
-
-                    {/* Formularz ponownego wysłania linku (widoczny tylko w przypadku błędu) */}
-                    {status === 'error' && (
-                        <div className="mt-4 pt-4 border-t border-gray-300">
-                            {resendSuccess ? (
-                                <div className="text-sm text-green-700 font-semibold flex items-center justify-center">
-                                    <CheckCircle2 className='h-4 w-4 mr-2' /> Nowy link resetujący został wysłany na podany adres e-mail.
-                                </div>
-                            ) : (
-                                <form onSubmit={handleResendLink}>
-                                    <p className="text-sm text-gray-600 mb-2">
-                                        Prosimy o wprowadzenie adresu e-mail, aby wysłać nowy link resetujący.
-                                    </p>
-                                    <input
-                                        type="email"
-                                        required
-                                        placeholder="Twój adres e-mail"
-                                        value={resendEmail}
-                                        onChange={(e) => setResendEmail(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md mb-2 text-sm focus:ring-black focus:border-black"
-                                    />
-                                    <button
-                                        type="submit"
-                                        disabled={resendLoading || !resendEmail}
-                                        className="w-full py-2 px-4 text-sm font-medium rounded-md text-white bg-black hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center"
-                                    >
-                                        {resendLoading ? <Loader className='h-4 w-4 mr-2 animate-spin' /> : <Mail className='h-4 w-4 mr-2' />}
-                                        Wyślij nowy link
-                                    </button>
-                                </form>
-                            )}
-                        </div>
-                    )}
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
+            <div className="max-w-md w-full space-y-8 text-center p-10 rounded-2xl shadow-2xl bg-white border border-gray-100">
+                
+                {/* Ikona Statusu */}
+                <div className="flex justify-center">
+                    {status === 'loading' && <Loader className="h-20 w-20 text-blue-500 animate-spin" />}
+                    {status === 'success' && <CheckCircle2 className="h-20 w-20 text-green-500" />}
+                    {status === 'error' && <XCircle className="h-20 w-20 text-red-500" />}
                 </div>
 
-                <div className="space-y-3 pt-4">
+                <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
+                    {status === 'loading' && 'Weryfikacja...'}
+                    {status === 'success' && 'Sukces!'}
+                    {status === 'error' && 'Coś poszło nie tak'}
+                </h1>
+
+                <div className={`p-5 rounded-xl border ${
+                    status === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 
+                    status === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-gray-50 border-gray-200 text-gray-600'
+                }`}>
+                    <p className="font-medium leading-relaxed">{message}</p>
+                </div>
+
+                {/* Sekcja ponownego wysyłania - tylko przy błędzie */}
+                {status === 'error' && (
+                    <div className="mt-8 pt-6 border-t border-gray-200">
+                        {resendSuccess ? (
+                            <div className="bg-green-100 p-4 rounded-lg flex items-center text-green-800 font-semibold animate-pulse">
+                                <Mail className="h-5 w-5 mr-3" />
+                                Nowy link został wysłany! Sprawdź skrzynkę.
+                            </div>
+                        ) : (
+                            <form onSubmit={handleResendLink} className="space-y-4">
+                                <div className="text-left">
+                                    <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-1">
+                                        Twój adres e-mail
+                                    </label>
+                                    <input
+                                        id="email"
+                                        type="email"
+                                        required
+                                        placeholder="np. jan@kowalski.pl"
+                                        value={resendEmail}
+                                        onChange={(e) => setResendEmail(e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-black focus:border-black outline-none transition-all"
+                                    />
+                                </div>
+                                <button
+                                    type="submit"
+                                    disabled={resendLoading || !resendEmail}
+                                    className="w-full py-3 px-4 flex items-center justify-center gap-2 bg-black text-white font-bold rounded-xl hover:bg-gray-800 transition-all shadow-lg disabled:bg-gray-400"
+                                >
+                                    {resendLoading ? <Loader className="h-5 w-5 animate-spin" /> : <RefreshCcw className="h-5 w-5" />}
+                                    Wyślij nowy link aktywacyjny
+                                </button>
+                            </form>
+                        )}
+                    </div>
+                )}
+
+                <div className="flex flex-col gap-3 pt-6">
                     <Link
                         to="/login"
-                        className={`w-full flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium rounded-md text-white ${status === 'success' ? 'bg-black hover:bg-gray-800' : 'bg-black hover:bg-gray-800'
-                            } transition-colors`}
-                        // Zapobiegamy kliknięciu, jeśli trwa auto-przekierowanie po sukcesie
-                        onClick={(e) => { if (status === 'success') e.preventDefault(); }}
+                        className="flex items-center justify-center gap-2 py-3 px-4 font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-all shadow-md"
                     >
-                        <LogIn className="h-4 w-4" />
-                        {status === 'success' ? 'Trwa przekierowanie...' : 'Wróć do logowania'}
+                        <LogIn className="h-5 w-5" />
+                        Przejdź do logowania
                     </Link>
-
-                    {status !== 'success' && (
-                        <Link
-                            to="/register"
-                            className="w-full flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium rounded-md text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
-                        >
-                            <Mail className="h-4 w-4" />
-                            Zarejestruj się ponownie
-                        </Link>
-                    )}
+                    
+                    <Link
+                        to="/register"
+                        className="flex items-center justify-center gap-2 py-3 px-4 font-semibold text-gray-700 bg-white border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
+                    >
+                        <ArrowLeft className="h-5 w-5" />
+                        Wróć do rejestracji
+                    </Link>
                 </div>
             </div>
         </div>

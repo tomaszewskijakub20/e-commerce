@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { 
-    ArrowLeft, Package, Edit3, Trash2, 
+import {
+    ArrowLeft, Package, Edit3, Trash2,
     Loader, CheckCircle, XCircle, Tag, Image as ImageIcon,
     Shield, X, AlertTriangle, Info
 } from "lucide-react";
@@ -27,7 +27,7 @@ const ConfirmationModal = ({
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[1000] p-4">
-            <div className ="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center">
                         <Icon className={`h-6 w-6 mr-3 ${iconColor}`} />
@@ -37,19 +37,19 @@ const ConfirmationModal = ({
                         <X className="h-5 w-5" />
                     </button>
                 </div>
-                
+
                 <p className="text-sm text-gray-600 mb-6">{message}</p>
-                
+
                 <div className="flex justify-end space-x-3">
-                    <button 
-                        onClick={onClose} 
+                    <button
+                        onClick={onClose}
                         className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
                         disabled={isProcessing}
                     >
                         {cancelText}
                     </button>
-                    <button 
-                        onClick={onConfirm} 
+                    <button
+                        onClick={onConfirm}
                         className={`px-4 py-2 text-white rounded-lg ${confirmBg} disabled:opacity-50 flex items-center`}
                         disabled={isProcessing}
                     >
@@ -67,28 +67,29 @@ export default function ProductView() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
-    
+
     const [product, setProduct] = useState(null);
     const [images, setImages] = useState([]);
+    const [attributes, setAttributes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    // Stan modala usuwania
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
 
     const canManage = user?.role === 'owner';
 
-    // Ładowanie danych produktu i obrazków
     useEffect(() => {
         const loadProductData = async () => {
             try {
                 setLoading(true);
                 setError("");
 
-                const [productResponse, imagesResponse] = await Promise.allSettled([
+                // Pobieramy produkt, obrazy oraz wartości atrybutów
+                const [productResponse, imagesResponse, attributesResponse] = await Promise.allSettled([
                     api.get(`/products/${id}`),
-                    api.get(`/products/${id}/images`)
+                    api.get(`/products/${id}/images`),
+                    api.get(`/product-attribute-values/product/${id}`)
                 ]);
 
                 if (productResponse.status === 'fulfilled') {
@@ -99,8 +100,11 @@ export default function ProductView() {
 
                 if (imagesResponse.status === 'fulfilled') {
                     setImages(imagesResponse.value.data);
-                } else {
-                    console.error("Błąd ładowania obrazków:", imagesResponse.reason);
+                }
+
+                // Przypisujemy atrybuty z dedykowanego endpointu
+                if (attributesResponse.status === 'fulfilled') {
+                    setAttributes(attributesResponse.value.data);
                 }
 
             } catch (err) {
@@ -109,7 +113,7 @@ export default function ProductView() {
                 setLoading(false);
             }
         };
-        
+
         loadProductData();
     }, [id]);
 
@@ -130,7 +134,7 @@ export default function ProductView() {
         try {
             setDeleteLoading(true);
             setError("");
-            await api.delete(`/products/${id}`); 
+            await api.delete(`/products/${id}`);
             setDeleteLoading(false);
             setShowDeleteModal(false);
             // Przekierowanie z komunikatem sukcesu
@@ -171,7 +175,7 @@ export default function ProductView() {
                     <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">Błąd ładowania</h3>
                     <p className="text-gray-600 mb-4">{error || "Produkt nie istnieje"}</p>
-                    <Link 
+                    <Link
                         to="/admin/products"
                         className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
                     >
@@ -185,37 +189,28 @@ export default function ProductView() {
     return (
         <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-                
-                {/* Nagłówek */}
+
+                {/* Nagłówek i przyciski akcji */}
                 <div className="mb-8 pt-8">
                     <div className="mb-4">
-                        <Link 
-                            to="/admin/products"
-                            className="inline-flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
-                        >
+                        <Link to="/admin/products" className="inline-flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors">
                             <ArrowLeft className="h-5 w-5" />
                             <span>Powrót do listy produktów</span>
                         </Link>
                     </div>
-                    
+
                     <div className="flex justify-between items-center">
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900">{product.name}</h1>
-                            <p className="text-gray-600 mt-2">Szczegóły produktu (SKU: {product.sku})</p>
+                            <p className="text-gray-600 mt-2">Szczegóły produktu (SKU: {product.sku || 'Brak'})</p>
                         </div>
                         {canManage && (
                             <div className="flex space-x-3">
-                                <button
-                                    onClick={handleEdit}
-                                    className="flex items-center space-x-2 bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-                                >
+                                <button onClick={() => navigate(`/admin/products/${id}/edit`)} className="flex items-center space-x-2 bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors">
                                     <Edit3 className="h-4 w-4" />
                                     <span>Edytuj</span>
                                 </button>
-                                <button
-                                    onClick={handleDeleteClick}
-                                    className="flex items-center space-x-2 border border-red-300 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition-colors"
-                                >
+                                <button onClick={() => setShowDeleteModal(true)} className="flex items-center space-x-2 border border-red-300 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition-colors">
                                     <Trash2 className="h-4 w-4" />
                                     <span>Usuń</span>
                                 </button>
@@ -224,37 +219,20 @@ export default function ProductView() {
                     </div>
                 </div>
 
-                {/* Komunikat o błędzie */}
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
-                       {error}
-                    </div>
-                )}
-
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    
-                    {/* Lewa kolumna */}
                     <div className="lg:col-span-2 space-y-6">
-                        
+
                         {/* Ceny i Klasyfikacja */}
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                             <h2 className="text-xl font-bold text-gray-900 mb-4">Ceny i Klasyfikacja</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Cena</label>
-                                    <p className="text-gray-900 font-bold text-2xl">{formatPrice(product.price)}</p>
+                                    <p className="text-gray-900 font-bold text-2xl">{new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(product.price)}</p>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Kategoria</label>
                                     <p className="text-gray-900 font-medium">{product.category ? product.category.name : 'Brak'}</p>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Koszt wysyłki</label>
-                                    <p className="text-gray-900 font-medium">{formatPrice(product.shippingCost)}</p>
-                                </div>
-                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Czas dostawy</label>
-                                    <p className="text-gray-900 font-medium">{product.estimatedDeliveryTime}</p>
                                 </div>
                             </div>
                         </div>
@@ -265,87 +243,62 @@ export default function ProductView() {
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Krótki opis</label>
-                                    <p className="text-gray-800">{product.shortDescription}</p>
+                                    <p className="text-gray-800">{product.shortDescription || 'Brak opisu'}</p>
                                 </div>
                                 <div className="border-t border-gray-200 pt-4">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Pełny opis</label>
-                                    <p className="text-gray-800 whitespace-pre-line">{product.description}</p>
+                                    <p className="text-gray-800 whitespace-pre-line">{product.description || 'Brak opisu'}</p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Atrybuty */}
+                        {/* POPRAWIONA SEKCJA ATRYBUTÓW */}
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4">Atrybuty produktu</h2>
-                            {product.attributeValues && product.attributeValues.length > 0 ? (
-                                <div className="space-y-3">
-                                    {product.attributeValues.map((attr, index) => (
-                                        <div key={attr.id || index} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                                            <div className="flex items-center space-x-3">
-                                                <Tag className="h-5 w-5 text-gray-400" />
-                                                <div>
-                                                    <p className="font-medium text-gray-900">
-                                                        {attr.attributeName}
-                                                        {attr.isKeyAttribute && (
-                                                            <Shield className="h-4 w-4 ml-2 inline text-yellow-600" title="Kluczowy atrybut" />
-                                                        )}
-                                                    </p>
-                                                    <p className="text-sm text-gray-600">{attr.value}</p>
-                                                </div>
+                            <h2 className="text-xl font-bold text-gray-900 mb-4">Specyfikacja techniczna</h2>
+                            {attributes && attributes.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {attributes.map((attr) => (
+                                        <div key={attr.id} className="flex items-start p-3 bg-gray-50 border border-gray-100 rounded-lg">
+                                            <Tag className="h-5 w-5 text-gray-400 mr-3 mt-0.5" />
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                                    {attr.attributeName}
+                                                    {attr.isKeyAttribute && (
+                                                        <Shield className="h-3 w-3 ml-1 inline text-blue-600" />
+                                                    )}
+                                                </p>
+                                                <p className="text-gray-900 font-medium">
+                                                    {attr.attributeValue || <span className="text-gray-400 italic">Nie ustawiono</span>}
+                                                </p>
                                             </div>
-                                            <p className="text-xs text-gray-400">{attr.attributeType}</p>
                                         </div>
                                     ))}
                                 </div>
                             ) : (
-                                <p className="text-gray-500 text-center py-4">Ten produkt nie ma jeszcze przypisanych atrybutów.</p>
+                                <p className="text-gray-500 text-center py-4 italic">Brak dodatkowych atrybutów dla tego produktu.</p>
                             )}
                         </div>
                     </div>
 
-                    {/* Prawa kolumna */}
+                    {/* Prawa kolumna - Obrazki i Status */}
                     <div className="space-y-6">
-                        {/* Status (Tylko Polecany) */}
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4">Wyróżnienie</h3>
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-gray-600">Polecany (na stronie głównej)</span>
-                                    {product.isFeatured ? (
-                                        <CheckCircle className="h-5 w-5 text-green-600" />
-                                    ) : (
-                                        <XCircle className="h-5 w-5 text-gray-500" />
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Obrazki */}
-                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4">Obrazki</h3>
+                            <h3 className="text-lg font-bold text-gray-900 mb-4">Galeria zdjęć</h3>
                             {images.length > 0 ? (
-                                <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-2">
                                     {images.map(img => (
-                                        <div key={img.id} className="flex items-center space-x-3">
-                                            <img 
-                                                src={img.url} 
-                                                alt={img.altText || 'Obrazek produktu'} 
-                                                className="w-16 h-16 rounded-lg object-cover border border-gray-200"
-                                            />
-                                            <div className="flex-1">
-                                                <p className="text-sm font-medium text-gray-900">{img.altText || "obrazek.jpg"}</p>
-                                                {img.isThumbnail && (
-                                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Miniaturka</span>
-                                                )}
-                                            </div>
-                                            {/* Przycisk edycji/usuwania widoczny po kliknięciu 'Edytuj' */}
+                                        <div key={img.id} className={`relative aspect-square rounded-lg overflow-hidden border ${img.isThumbnail ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-200'}`}>
+                                            <img src={img.url} alt={img.altText || 'Zdjęcie'} className="w-full h-full object-cover" />
+                                            {img.isThumbnail && (
+                                                <span className="absolute top-1 left-1 bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm">Główne</span>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                             ) : (
-                                <div className="text-center py-4">
-                                    <ImageIcon className="h-10 w-10 text-gray-400 mx-auto mb-2" />
-                                    <p className="text-gray-500">Brak obrazków</p>
+                                <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
+                                    <ImageIcon className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                                    <p className="text-sm text-gray-400">Brak zdjęć</p>
                                 </div>
                             )}
                         </div>
@@ -353,15 +306,13 @@ export default function ProductView() {
                 </div>
             </div>
 
-            {/* Modal potwierdzenia usunięcia */}
             <ConfirmationModal
                 show={showDeleteModal}
-                onClose={cancelDelete}
+                onClose={() => setShowDeleteModal(false)}
                 onConfirm={confirmDelete}
-                title={`Potwierdź usunięcie produktu`}
-                message={`Czy na pewno chcesz trwale usunąć produkt "${product?.name}"? Tej operacji nie można cofnąć.`}
-                confirmText="Usuń produkt"
-                cancelText="Anuluj"
+                title="Usuń produkt"
+                message={`Czy na pewno chcesz usunąć produkt "${product?.name}"?`}
+                confirmText="Usuń trwale"
                 type="danger"
                 isProcessing={deleteLoading}
             />

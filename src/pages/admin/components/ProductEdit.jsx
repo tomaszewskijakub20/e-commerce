@@ -93,7 +93,7 @@ export default function ProductEdit() {
         estimatedDeliveryTime: "",
         isFeatured: false,
         categoryId: "",
-        attributeValues: {}, // Mapa: { [product_attribute_value_id]: "wartość" }
+        attributeValues: {},
     });
 
     const [loading, setLoading] = useState(true);
@@ -116,73 +116,105 @@ export default function ProductEdit() {
     const canManage = user?.role === 'owner';
 
 
-    // Funkcja ładowania wszystkich danych produktu
     const loadData = async () => {
+        // Zabezpieczenie przed brakiem ID lub błędnym formatem w URL
+        if (!id || id === 'undefined' || id === 'null') {
+            setError("Nieprawidłowy identyfikator produktu.");
+            setLoading(false);
+            return;
+        }
+
         try {
             setLoading(true);
             setError("");
 
-            const [productRes, categoriesRes, imagesRes] = await Promise.allSettled([
+            // Wykonujemy zapytania równolegle dla lepszej wydajności
+            const [productRes, categoriesRes, imagesRes, attributesRes] = await Promise.allSettled([
                 api.get(`/products/${id}`),
                 api.get('/categories'),
-                api.get(`/products/${id}/images`)
+                api.get(`/products/${id}/images`).catch(err => {
+                    console.warn("Błąd ładowania zdjęć (400):", err.message);
+                    return { data: [] };
+                }),
+                api.get(`/product-attribute-values/product/${id}`)
             ]);
 
+            // Krytyczny warunek: produkt musi zostać pobrany
             if (productRes.status === 'rejected') {
-                const reason = productRes.reason.response?.data?.message || productRes.reason.message;
-                throw new Error(`Nie udało się załadować podstawowych danych produktu. Powód: ${reason}`);
+                throw new Error("Błąd ładowania danych podstawowych produktu.");
             }
 
             const productData = productRes.value.data;
-            const categoryId = productData.category?.id;
+            const attrData = attributesRes.status === 'fulfilled' ? attributesRes.value.data : [];
+            const catId = productData.category?.id;
 
-            // Pobieranie definicji atrybutów dla kategorii
-            let categoryAttributesData = [];
-            if (categoryId) {
-                const categoryAttributesRes = await api.get(`/categories/${categoryId}/attributes`);
-                categoryAttributesData = categoryAttributesRes.data;
-                setCategoryAttributes(categoryAttributesData);
+            // Pobieramy definicje atrybutów dla kategorii
+            let catAttrs = [];
+            if (catId) {
+                try {
+                    const catAttrsRes = await api.get(`/categories/${catId}/attributes`);
+                    catAttrs = catAttrsRes.data;
+                    setCategoryAttributes(catAttrs);
+                } catch (catErr) {
+                    console.error("Błąd ładowania definicji atrybutów kategorii:", catErr);
+                }
             }
 
-            // Przygotowanie mapowania istniejących wartości atrybutów
             const attributeValueMap = {};
-            const existingAttributeIds = new Set();
+            const usedGlobalIds = new Set();
 
-            if (productData.attributeValues) {
-                productData.attributeValues.forEach(attr => {
-                    attributeValueMap[attr.id] = attr.value;
-                    existingAttributeIds.add(attr.attributeId);
+            // Mapowanie wartości atrybutów przypisanych do produktu
+            if (Array.isArray(attrData)) {
+                attrData.forEach(av => {
+                    attributeValueMap[av.id] = av.attributeValue || "";
+
+                    // Szukamy attributeId w definicjach kategorii, aby móc dodać/edytować
+                    const definition = catAttrs.find(ca =>
+                        ca.attributeName?.trim().toLowerCase() === av.attributeName?.trim().toLowerCase()
+                    );
+
+                    const globalId = definition ? definition.attributeId : av.attributeId;
+                    if (globalId) {
+                        usedGlobalIds.add(globalId);
+                    }
+
+                    // Przypisujemy globalne ID do obiektu, aby PUT wiedział co wysłać
+                    av.attributeId = globalId;
                 });
             }
 
-            // Znajdowanie dostępnych atrybutów do dodania (tych, które nie mają jeszcze wartości)
-            const available = categoryAttributesData.filter(
-                attrDef => !existingAttributeIds.has(attrDef.attributeId)
-            );
-            setAvailableAttributes(available);
+            // Atrybuty, których jeszcze nie ma w produkcie, a są w kategorii
+            setAvailableAttributes(catAttrs.filter(ca => !usedGlobalIds.has(ca.attributeId)));
 
-            setProduct(productData);
+            // Ustawiamy stany komponentu
+            setProduct({ ...productData, attributeValues: attrData });
             setCategories(categoriesRes.status === 'fulfilled' ? categoriesRes.value.data : []);
-            setCurrentImages(imagesRes.status === 'fulfilled' ? imagesRes.value.data : []);
 
+            // Jeśli imagesRes to catch, bierzemy pustą tablicę, w przeciwnym razie dane z API
+            const finalImages = imagesRes.value?.data || imagesRes.data || [];
+            setCurrentImages(Array.isArray(finalImages) ? finalImages : []);
+
+            // Wypełniamy formularz danymi
             setFormData({
-                name: productData.name,
-                seoSlug: productData.seoSlug,
-                sku: productData.sku || '',
+                name: productData.name || "",
+                seoSlug: productData.seoSlug || "",
+                sku: productData.sku || "",
                 shortDescription: productData.shortDescription || "",
                 description: productData.description || "",
                 price: productData.price || "",
-                shippingCost: productData.shippingCost || "",
-                estimatedDeliveryTime: productData.estimatedDeliveryTime || "",
-                isFeatured: productData.isFeatured,
-                categoryId: categoryId || "",
+                shippingCost: productData.shippingCost || "20.00",
+                estimatedDeliveryTime: productData.estimatedDeliveryTime || "3-5 dni",
+                isFeatured: productData.isFeatured || false,
+                categoryId: catId || "",
                 attributeValues: attributeValueMap,
             });
 
+            // Resetujemy flagę zmian
             setIsDirty(false);
 
         } catch (err) {
-            setError(err.message || "Błąd ładowania danych.");
+            console.error("Pełny błąd loadData:", err);
+            setError(err.message || "Wystąpił nieoczekiwany błąd podczas ładowania danych.");
         } finally {
             setLoading(false);
         }
@@ -239,8 +271,6 @@ export default function ProductEdit() {
                 [valueId]: newValue
             }
         }));
-        setSuccess("");
-        setError("");
         setIsDirty(true);
     };
 
@@ -249,34 +279,16 @@ export default function ProductEdit() {
         e.preventDefault();
         if (!canManage) return;
 
-        if (parseFloat(formData.price) < 0 || parseFloat(formData.shippingCost) < 0) {
-            setError("Ceny nie mogą być ujemne.");
-            return;
-        }
-
-        // Przygotowanie payloadu
-        const attributeValuesPayload = product.attributeValues.map(originalAttr => {
-            const newValue = formData.attributeValues[originalAttr.id];
-
-            return {
-                id: originalAttr.id,
-                attributeId: originalAttr.attributeId,
-                value: newValue !== undefined ? newValue : originalAttr.value
-            };
-        });
-
         const productUpdatePayload = {
-            name: formData.name,
-            seoSlug: formData.seoSlug,
-            sku: formData.sku,
-            shortDescription: formData.shortDescription,
-            description: formData.description,
+            name: formData.name.trim(),
+            description: formData.description.trim(),
+            shortDescription: formData.shortDescription.trim(),
             price: parseFloat(formData.price),
-            shippingCost: parseFloat(formData.shippingCost),
-            estimatedDeliveryTime: formData.estimatedDeliveryTime,
+            vatRate: 23.0,
+            shippingCost: parseFloat(formData.shippingCost) || 20.0,
+            estimatedDeliveryTime: formData.estimatedDeliveryTime || "3-5 dni",
             isFeatured: formData.isFeatured,
-            categoryId: formData.categoryId,
-            attributeValues: attributeValuesPayload,
+            categoryId: parseInt(formData.categoryId),
         };
 
         setDataToSave(productUpdatePayload);
@@ -293,33 +305,52 @@ export default function ProductEdit() {
         setSuccess("");
 
         try {
-            // Wysłanie głównego payloadu
-            await api.put(`/products/${id}`, dataToSave);
+            // Mapowanie atrybutów do głównego payloadu
+            const attributeValuesPayload = product.attributeValues.map(av => ({
+                id: av.id,
+                attributeId: av.attributeId,
+                attributeValue: formData.attributeValues[av.id] !== undefined
+                    ? String(formData.attributeValues[av.id]).trim()
+                    : String(av.attributeValue || "")
+            }));
 
-            // Wysłanie nowych zdjęć
+            const finalPayload = {
+                ...dataToSave,
+                attributeValues: attributeValuesPayload
+            };
+
+            // Aktualizacja produktu i atrybutów
+            await api.put(`/products/${id}`, finalPayload);
+
+            // Obsługa nowych zdjęć
             if (newImages.length > 0) {
-                const uploadPromises = newImages.map(file => {
-                    const imageFormData = new FormData();
-                    imageFormData.append('file', file);
-                    return api.post(`/products/${id}/images`, imageFormData, {
+                // Sprawdzamy, czy produkt ma już jakieś zdjęcia na serwerze
+                const hasExistingImages = currentImages.length > 0;
+
+                for (let i = 0; i < newImages.length; i++) {
+                    const imgFormData = new FormData();
+                    imgFormData.append('file', newImages[i]);
+
+                    const uploadRes = await api.post(`/products/${id}/images`, imgFormData, {
                         headers: { 'Content-Type': 'multipart/form-data' }
                     });
-                });
-                await Promise.all(uploadPromises);
-                // Wyczyść kolejkę podglądów po udanym uploadzie
-                newImages.forEach(URL.revokeObjectURL);
+
+                    // Jeśli produkt był "pusty" (brak zdjęć), pierwsze wgrane zdjęcie ustawiamy jako miniaturkę
+                    if (!hasExistingImages && i === 0 && uploadRes.data?.id) {
+                        await api.post(`/products/${id}/images/${uploadRes.data.id}/thumbnail`);
+                    }
+                }
                 setNewImages([]);
                 setImagePreviews([]);
             }
 
-            setSuccess("Produkt zaktualizowany pomyślnie!");
+            setSuccess("Produkt został pomyślnie zaktualizowany!");
             setIsDirty(false);
-            await loadData(); // Odświeżenie wszystkich danych, w tym listy obrazków i atrybutów
+            await loadData();
 
         } catch (err) {
-            console.error("Błąd zapisu:", err.response);
-            const errorMessage = err.response?.data?.message || "Błąd podczas aktualizacji produktu.";
-            setError(errorMessage);
+            console.error("Błąd zapisu:", err.response?.data || err);
+            setError(err.response?.data?.message || "Błąd podczas aktualizacji produktu.");
         } finally {
             setSubmitting(false);
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -332,12 +363,15 @@ export default function ProductEdit() {
     const handleOpenAddModal = async () => {
         if (!canManage) return;
 
+        // Odświeżamy listę dostępnych atrybutów kategorii przed otwarciem
         await loadData();
 
         if (availableAttributes.length > 0) {
+            // Ustawiamy pierwszy dostępny atrybut jako domyślny
+            const firstAvailable = availableAttributes[0];
             setNewAttributeToAdd({
-                id: availableAttributes[0].id,
-                attributeId: availableAttributes[0].attributeId,
+                id: firstAvailable.id,
+                attributeId: firstAvailable.attributeId,
                 value: ''
             });
             setShowAddAttributeModal(true);
@@ -366,7 +400,11 @@ export default function ProductEdit() {
     // Potwierdzenie i dodanie nowej wartości atrybutu do API
     const confirmAddAttribute = async (e) => {
         e.preventDefault();
-        if (!newAttributeToAdd.attributeId || !newAttributeToAdd.value.trim()) {
+
+        // Pobieramy poprawne definicje z dostępnych atrybutów kategorii
+        const selectedAttr = availableAttributes.find(a => a.id === newAttributeToAdd.id);
+
+        if (!selectedAttr || !newAttributeToAdd.value.trim()) {
             setError("Wybierz atrybut i wprowadź wartość.");
             return;
         }
@@ -377,28 +415,19 @@ export default function ProductEdit() {
         try {
             const payload = {
                 productId: parseInt(id),
-                attributeId: newAttributeToAdd.attributeId,
+                attributeId: selectedAttr.attributeId, // Przekazujemy globalne ID definicji
                 value: newAttributeToAdd.value.trim(),
             };
 
             await api.post('/product-attribute-values', payload);
 
-            await loadData();
+            await loadData(); // Odświeżamy dane produktu
             setSuccess("Nowy atrybut dodany pomyślnie!");
             setShowAddAttributeModal(false);
 
         } catch (err) {
             console.error("Błąd dodawania atrybutu:", err.response);
-            let errMsg = "Błąd dodawania atrybutu.";
-
-            if (err.response?.status === 409) {
-                await loadData();
-                errMsg = "Błąd 409: Ten atrybut jest już przypisany do tego produktu. Stan został odświeżony.";
-            } else if (err.response?.data?.message) {
-                errMsg = err.response.data.message;
-            }
-
-            setError(errMsg);
+            setError(err.response?.data?.message || "Błąd dodawania atrybutu.");
         } finally {
             setSubmitting(false);
         }
@@ -711,29 +740,6 @@ export default function ProductEdit() {
                                     />
                                 </div>
 
-                                <div>
-                                    <label htmlFor="shippingCost" className="block text-sm font-medium text-gray-700 mb-1">Koszt wysyłki (PLN)</label>
-                                    <input
-                                        type="number" id="shippingCost" name="shippingCost"
-                                        value={formData.shippingCost} onChange={handleChange}
-                                        onKeyDown={(e) => { if (e.key === '-' || e.key === 'e') e.preventDefault(); }}
-                                        step="0.01" min="0"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
-                                        required
-                                        disabled={submitting}
-                                    />
-                                </div>
-                                <div>
-                                    <label htmlFor="estimatedDeliveryTime" className="block text-sm font-medium text-gray-700 mb-1">Szacowany czas dostawy</label>
-                                    <input
-                                        type="text" id="estimatedDeliveryTime" name="estimatedDeliveryTime"
-                                        value={formData.estimatedDeliveryTime} onChange={handleChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
-                                        required
-                                        disabled={submitting}
-                                    />
-                                </div>
-
                                 <div className="md:col-span-2">
                                     <label htmlFor="categoryId" className="block text-sm font-medium text-gray-700 mb-1">Kategoria</label>
                                     <select
@@ -774,31 +780,26 @@ export default function ProductEdit() {
                                 </div>
 
                                 <div className="space-y-4">
-                                    {product.attributeValues.map(attrValue => (
-                                        <div key={attrValue.id} className="p-3 border border-gray-200 rounded-lg flex items-center justify-between">
+                                    {product.attributeValues.map(av => (
+                                        <div key={av.id} className="p-3 border border-gray-200 rounded-lg flex items-center justify-between bg-gray-50">
                                             <div className="flex-1">
-                                                <label
-                                                    htmlFor={`attribute-${attrValue.id}`}
-                                                    className="block text-sm font-medium text-gray-700 mb-1"
-                                                >
-                                                    {attrValue.attributeName}
-                                                    {attrValue.attributeType && <span className="text-xs text-gray-400 ml-2">({attrValue.attributeType})</span>}
+                                                <label htmlFor={`attribute-${av.id}`} className="block text-xs font-bold text-gray-400 uppercase mb-1">
+                                                    {av.attributeName}
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    id={`attribute-${attrValue.id}`}
-                                                    value={formData.attributeValues[attrValue.id] || attrValue.value || ''}
-                                                    onChange={(e) => handleAttributeChange(attrValue.id, e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
+                                                    id={`attribute-${av.id}`}
+                                                    value={formData.attributeValues[av.id] ?? av.attributeValue ?? ""}
+                                                    onChange={(e) => handleAttributeChange(av.id, e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black bg-white outline-none font-medium"
                                                     disabled={submitting}
                                                 />
                                             </div>
                                             {canManage && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleRemoveAttributeClick(attrValue.id)}
-                                                    title="Usuń wartość atrybutu"
-                                                    className="ml-4 p-2 rounded-full text-red-500 hover:bg-red-100 transition-colors"
+                                                    onClick={() => handleRemoveAttributeClick(av.id)}
+                                                    className="ml-4 p-2 text-red-500 hover:bg-red-100 rounded-full transition-colors"
                                                     disabled={submitting}
                                                 >
                                                     <Trash2 className="h-5 w-5" />

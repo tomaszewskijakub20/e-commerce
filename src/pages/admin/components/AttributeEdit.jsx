@@ -65,99 +65,103 @@ export default function AttributeEdit() {
     const [formData, setFormData] = useState({
         name: '',
         type: 'TEXT',
-        isActive: true
+        isKeyAttribute: false,
+        globalAttributeId: null
     });
+
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [categoryName, setCategoryName] = useState('');
 
-    // Stany dla modala potwierdzenia zapisu
-    const [showConfirmModal, setShowConfirmModal] = useState(false);
-    const [dataToConfirm, setDataToConfirm] = useState(null);
+    // Stan kontrolujący zmiany i modale
+    const [isDirty, setIsDirty] = useState(false);
+    const [showSaveModal, setShowSaveModal] = useState(false);
+    const [showCancelModal, setShowCancelModal] = useState(false);
 
-    // Typy atrybutów z dokumentacji API
-    const attributeTypes = [
-        "TEXT", "NUMBER", "BOOLEAN", "DATE", "SELECT"
-    ];
+    const attributeTypes = ["TEXT", "NUMBER", "BOOLEAN", "DATE", "SELECT"];
 
-    // Efekt do ładowania danych atrybutu i nazwy kategorii
     useEffect(() => {
-        const loadAttribute = async () => {
+        const loadAttributeData = async () => {
             try {
                 setLoading(true);
-                setError('');
-
-                // Pobranie danych atrybutu
                 const attrResponse = await api.get(`/categories/${categoryId}/attributes/${attributeId}`);
                 const attrData = attrResponse.data;
+                
                 setFormData({
-                    name: attrData.name,
-                    type: attrData.type,
-                    isActive: attrData.isActive
+                    name: attrData.attributeName || '',
+                    type: attrData.attributeType || 'TEXT',
+                    isKeyAttribute: attrData.isKeyAttribute || false,
+                    globalAttributeId: attrData.attributeId
                 });
 
-                // Pobranie nazwy kategorii dla nagłówka
                 const catResponse = await api.get(`/categories/${categoryId}`);
                 setCategoryName(catResponse.data.name);
-
             } catch (err) {
-                console.error("Błąd ładowania atrybutu:", err);
                 setError("Nie udało się załadować danych atrybutu.");
             } finally {
                 setLoading(false);
             }
         };
-
-        loadAttribute();
+        loadAttributeData();
     }, [categoryId, attributeId]);
 
-    // Obsługa zmian w formularzu
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
         setFormData(prev => ({
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
+        // Oznaczamy formularz jako "brudny" przy zmianie
+        setIsDirty(true);
     };
 
-    // Walidacja formularza i otwarcie modala potwierdzenia
+    // Obsługa przycisku Powrót/Anuluj
+    const handleCancelClick = () => {
+        if (isDirty) {
+            setShowCancelModal(true);
+        } else {
+            navigate(`/admin/categories/${categoryId}`);
+        }
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
-
         if (!formData.name.trim()) {
             setError("Nazwa atrybutu jest wymagana.");
             return;
         }
-
         setError('');
-        setDataToConfirm(formData);
-        setShowConfirmModal(true);
+        setShowSaveModal(true);
     };
 
-    // Wysyłanie danych do API po potwierdzeniu
     const confirmSubmit = async () => {
-        if (!dataToConfirm) return;
-
-        setShowConfirmModal(false);
+        setShowSaveModal(false);
         setSaving(true);
         setError('');
 
         try {
-            // Endpoint: PUT /api/categories/{categoryId}/attributes/{id}
-            await api.put(`/categories/${categoryId}/attributes/${attributeId}`, dataToConfirm);
+            // Aktualizacja globalnej definicji
+            await api.put(`/attributes/${formData.globalAttributeId}`, {
+                name: formData.name,
+                type: formData.type
+            });
 
-            setSaving(false);
-            // Przekierowanie z komunikatem sukcesu
-            navigate(`/admin/categories/${categoryId}`, { state: { successMessage: `Atrybut "${dataToConfirm.name}" zaktualizowany pomyślnie.` } });
+            // Aktualizacja powiązania w kategorii
+            await api.put(`/categories/${categoryId}/attributes/${attributeId}`, {
+                attributeId: formData.globalAttributeId,
+                isKeyAttribute: formData.isKeyAttribute,
+                isActive: true
+            });
 
+            setIsDirty(false);
+            navigate(`/admin/categories/${categoryId}`, { 
+                state: { successMessage: `Zmiany w atrybucie "${formData.name}" zostały zapisane.` } 
+            });
         } catch (err) {
-            console.error("Błąd zapisu atrybutu:", err);
-            const errMsg = err.response?.data?.message || "Wystąpił błąd podczas zapisu.";
-            setError(errMsg);
-            setSaving(false);
+            setError(err.response?.data?.message || "Wystąpił błąd podczas zapisu.");
         } finally {
-            setDataToConfirm(null);
+            setSaving(false);
         }
     };
 
@@ -171,102 +175,92 @@ export default function AttributeEdit() {
 
     return (
         <div className="min-h-screen bg-gray-50 py-8">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-3xl mx-auto px-4">
 
-                {/* Nagłówek */}
                 <div className="mb-8 pt-8">
                     <div className="mb-4">
-                        <Link
-                            to={`/admin/categories/${categoryId}`}
+                        <button
+                            onClick={handleCancelClick}
                             className="inline-flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
                         >
                             <ArrowLeft className="h-5 w-5" />
                             <span>Powrót do kategorii "{categoryName}"</span>
-                        </Link>
+                        </button>
                     </div>
-
-                    <h1 className="text-3xl font-bold text-gray-900">
-                        Edytuj atrybut
-                    </h1>
+                    <h1 className="text-3xl font-bold text-gray-900">Edytuj atrybut</h1>
                 </div>
 
-                {/* Komunikat o błędzie */}
                 {error && (
                     <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 flex items-center justify-between">
                         <div className="flex items-center">
                             <XCircle className="h-5 w-5 mr-2" />
                             <span>{error}</span>
                         </div>
-                        <button onClick={() => setError('')} className="text-red-700 font-bold">X</button>
+                        <X className="h-5 w-5 cursor-pointer" onClick={() => setError('')} />
                     </div>
                 )}
 
-                {/* Formularz */}
                 <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
-
                     <div>
-                        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                            Nazwa atrybutu *
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Nazwa atrybutu *</label>
                         <input
                             type="text"
-                            id="name"
                             name="name"
                             value={formData.name}
                             onChange={handleChange}
                             required
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
-                            placeholder="Np. Kolor, Materiał, Waga"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
                             disabled={saving}
                         />
                     </div>
 
                     <div>
-                        <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">
-                            Typ atrybutu *
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Typ atrybutu *</label>
                         <select
-                            id="type"
                             name="type"
                             value={formData.type}
                             onChange={handleChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black bg-white"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-black"
                             disabled={saving}
                         >
                             {attributeTypes.map(type => (
                                 <option key={type} value={type}>{type}</option>
                             ))}
                         </select>
-                        <p className="mt-1 text-xs text-gray-500">Określa rodzaj danych (np. tekst, liczba).</p>
                     </div>
 
-                    <div className="flex items-center">
-                        <input
-                            type="checkbox"
-                            id="isActive"
-                            name="isActive"
-                            checked={formData.isActive}
-                            onChange={handleChange}
-                            className="h-4 w-4 text-black focus:ring-black border-gray-300 rounded"
-                            disabled={saving}
-                        />
-                        <label htmlFor="isActive" className="ml-2 block text-sm font-medium text-gray-700">
-                            Atrybut jest aktywny
-                        </label>
+                    <div className="pt-4 border-t border-gray-100">
+                        <div className="flex items-start">
+                            <div className="flex items-center h-5">
+                                <input
+                                    type="checkbox"
+                                    id="isKeyAttribute"
+                                    name="isKeyAttribute"
+                                    checked={formData.isKeyAttribute}
+                                    onChange={handleChange}
+                                    className="h-4 w-4 text-black focus:ring-black border-gray-300 rounded"
+                                />
+                            </div>
+                            <div className="ml-3 text-sm">
+                                <label htmlFor="isKeyAttribute" className="font-medium text-gray-700">Atrybut kluczowy</label>
+                                <p className="text-gray-500">Czy ten atrybut ma być widoczny w filtrach tej kategorii?</p>
+                            </div>
+                        </div>
                     </div>
 
                     <div className="flex justify-end space-x-3 border-t border-gray-200 pt-4">
-                        <Link
-                            to={`/admin/categories/${categoryId}`}
+                        <button
+                            type="button"
+                            onClick={handleCancelClick}
                             className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                             disabled={saving}
                         >
                             Anuluj
-                        </Link>
+                        </button>
                         <button
                             type="submit"
-                            disabled={saving}
-                            className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                            disabled={saving || !isDirty}
+                            className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center space-x-2"
                         >
                             {saving ? <Loader className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                             <span>{saving ? 'Zapisywanie...' : 'Zapisz zmiany'}</span>
@@ -275,22 +269,31 @@ export default function AttributeEdit() {
                 </form>
             </div>
 
-            {/* Modal potwierdzenia edycji */}
+            {/* Modal potwierdzenia zapisu */}
             <ConfirmationModal
-                show={showConfirmModal}
-                onClose={() => {
-                    setShowConfirmModal(false);
-                    setDataToConfirm(null);
-                }}
+                show={showSaveModal}
+                onClose={() => setShowSaveModal(false)}
                 onConfirm={confirmSubmit}
-                title="Potwierdź Edycję Atrybutu"
-                message={`Czy na pewno chcesz zapisać zmiany dla atrybutu "${dataToConfirm?.name || ''}"?`}
-                confirmText="Zapisz"
-                cancelText="Wróć do edycji"
-                type="warning"
+                title="Zapisać zmiany?"
+                message={`Wprowadzone zmiany w atrybucie "${formData.name}" zostaną zastosowane w systemie.`}
+                confirmText="Zapisz zmiany"
+                cancelText="Wróć"
+                type="success"
                 isProcessing={saving}
             />
 
+            {/* Modal anulowania (isDirty) */}
+            <ConfirmationModal
+                show={showCancelModal}
+                onClose={() => setShowCancelModal(false)}
+                onConfirm={() => navigate(`/admin/categories/${categoryId}`)}
+                title="Niezapisane zmiany"
+                message="Czy na pewno chcesz wyjść? Wprowadzone zmiany zostaną utracone."
+                confirmText="Opuść stronę"
+                cancelText="Zostań"
+                type="warning"
+                isProcessing={saving}
+            />
         </div>
     );
 }

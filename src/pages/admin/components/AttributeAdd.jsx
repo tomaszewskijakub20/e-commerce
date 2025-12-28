@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Loader, Save, ArrowLeft, XCircle, CheckCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { Loader, Save, ArrowLeft, XCircle, CheckCircle, AlertTriangle, Info, X, Plus, List } from 'lucide-react';
 import api from '../../../services/api';
 
 // Komponent uniwersalnego modalu potwierdzenia
@@ -65,28 +65,43 @@ export default function AttributeAdd() {
     const [formData, setFormData] = useState({
         name: '',
         type: 'TEXT',
-        isActive: true
+        attributeId: '', 
+        isKeyAttribute: false
     });
+    
+    const [useExisting, setUseExisting] = useState(true); 
+    const [globalAttributes, setGlobalAttributes] = useState([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [categoryName, setCategoryName] = useState('');
-
-    // Stany dla modala potwierdzenia dodawania
     const [showConfirmModal, setShowConfirmModal] = useState(false);
-    const [dataToConfirm, setDataToConfirm] = useState(null);
+    const [showCancelModal, setShowCancelModal] = useState(false);
+    const [isDirty, setIsDirty] = useState(false);
 
-    const attributeTypes = [
-        "TEXT", "NUMBER", "BOOLEAN", "DATE", "SELECT"
-    ];
+    const attributeTypes = ["TEXT", "NUMBER", "BOOLEAN", "DATE", "SELECT"];
 
-    // Pobieranie nazwy kategorii dla nagłówka
+    // Pobieranie danych początkowych
     useEffect(() => {
-        const loadCategoryName = async () => {
+        const loadInitialData = async () => {
             setLoading(true);
             try {
                 const catResponse = await api.get(`/categories/${categoryId}`);
                 setCategoryName(catResponse.data.name);
+
+                try {
+                    const attrsResponse = await api.get('/attributes?size=100');
+                    const attributesList = attrsResponse.data.content || [];
+                    setGlobalAttributes(attributesList);
+                    
+                    if (attributesList.length === 0) {
+                        setUseExisting(false);
+                    }
+                } catch (attrErr) {
+                    console.warn("Błąd pobierania /api/attributes.");
+                    setUseExisting(false);
+                }
+
             } catch (err) {
                 console.error("Błąd ładowania kategorii:", err);
                 setError("Nie można załadować danych kategorii.");
@@ -94,69 +109,75 @@ export default function AttributeAdd() {
                 setLoading(false);
             }
         };
-        loadCategoryName();
+        loadInitialData();
     }, [categoryId]);
 
-    // Obsługa zmian w formularzu
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
         setFormData(prev => ({
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
+        setIsDirty(true); // Oznacz zmiany
     };
 
-    // Walidacja formularza i otwarcie modala potwierdzenia
+    // Obsługa kliknięcia Anuluj
+    const handleCancelClick = () => {
+        if (isDirty) {
+            setShowCancelModal(true);
+        } else {
+            navigate(`/admin/categories/${categoryId}`);
+        }
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
-
-        if (!formData.name.trim()) {
+        if (!useExisting && !formData.name.trim()) {
             setError("Nazwa atrybutu jest wymagana.");
             return;
         }
-
+        if (useExisting && !formData.attributeId) {
+            setError("Proszę wybrać atrybut z listy.");
+            return;
+        }
         setError('');
-        setDataToConfirm(formData);
         setShowConfirmModal(true);
     };
 
-    // Wysyłanie danych do API po potwierdzeniu w modal
     const confirmSubmit = async () => {
-        if (!dataToConfirm) return;
-
         setShowConfirmModal(false);
         setSaving(true);
         setError('');
 
         try {
-            // Endpoint: POST /api/categories/{categoryId}/attributes
-            await api.post(`/categories/${categoryId}/attributes`, dataToConfirm);
+            let finalAttributeId = formData.attributeId;
 
-            setSaving(false);
-            // Przekierowanie z komunikatem sukcesu
-            navigate(`/admin/categories/${categoryId}`, { state: { successMessage: `Atrybut "${dataToConfirm.name}" dodany pomyślnie.` } });
-
-        } catch (err) {
-            console.error("Błąd zapisu atrybutu:", err.response);
-
-            let detailedError = "Wystąpił błąd podczas zapisu.";
-
-            // Parsowanie błędów z odpowiedzi API
-            if (err.response?.data?.details) {
-                detailedError = err.response.data.details
-                    .map(d => `${d.field}: ${d.message}`)
-                    .join(', ');
-            } else if (err.response?.data?.message) {
-                detailedError = err.response.data.message;
+            if (!useExisting) {
+                const newAttrResp = await api.post('/attributes', {
+                    name: formData.name,
+                    type: formData.type
+                });
+                finalAttributeId = newAttrResp.data.id;
             }
 
-            setError(detailedError);
-            setSaving(false);
+            await api.post(`/categories/${categoryId}/attributes`, {
+                attributeId: parseInt(finalAttributeId),
+                isKeyAttribute: formData.isKeyAttribute,
+                isActive: true 
+            });
+
+            setIsDirty(false); // Resetuj przed nawigacją
+            navigate(`/admin/categories/${categoryId}`, { 
+                state: { successMessage: `Atrybut został pomyślnie dodany do kategorii.` } 
+            });
+
+        } catch (err) {
+            console.error("Błąd zapisu:", err);
+            setError(err.response?.data?.message || "Wystąpił błąd podczas zapisywania.");
         } finally {
-            setDataToConfirm(null);
+            setSaving(false);
         }
     };
-
 
     if (loading) {
         return (
@@ -168,124 +189,166 @@ export default function AttributeAdd() {
 
     return (
         <div className="min-h-screen bg-gray-50 py-8">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-
-                {/* Nagłówek */}
+            <div className="max-w-3xl mx-auto px-4">
+                
                 <div className="mb-8 pt-8">
-                    <div className="mb-4">
-                        <Link
-                            to={`/admin/categories/${categoryId}`}
-                            className="inline-flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
-                        >
-                            <ArrowLeft className="h-5 w-5" />
-                            <span>Powrót do kategorii "{categoryName}"</span>
-                        </Link>
-                    </div>
-
-                    <h1 className="text-3xl font-bold text-gray-900">
-                        Dodaj nowy atrybut
-                    </h1>
+                    <button 
+                        onClick={handleCancelClick}
+                        className="inline-flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors mb-4"
+                    >
+                        <ArrowLeft className="h-5 w-5" />
+                        <span>Powrót do kategorii "{categoryName}"</span>
+                    </button>
+                    <h1 className="text-3xl font-bold text-gray-900">Dodaj atrybut</h1>
                 </div>
 
-                {/* Komunikat o błędzie */}
                 {error && (
                     <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 flex items-center justify-between">
                         <div className="flex items-center">
                             <XCircle className="h-5 w-5 mr-2" />
                             <span>{error}</span>
                         </div>
-                        <button onClick={() => setError('')} className="text-red-700 font-bold">X</button>
+                        <X className="h-5 w-5 cursor-pointer" onClick={() => setError('')} />
                     </div>
                 )}
 
-                {/* Formularz */}
+                {/* Przełącznik trybu */}
+                <div className="flex mb-6 bg-gray-200 p-1 rounded-lg">
+                    <button 
+                        type="button"
+                        onClick={() => { setUseExisting(true); setIsDirty(true); }}
+                        className={`flex-1 flex items-center justify-center py-2 rounded-md transition-all ${useExisting ? 'bg-white shadow-sm text-black' : 'text-gray-600'}`}
+                    >
+                        <List className="h-4 w-4 mr-2" /> Wybierz z bazy
+                    </button>
+                    <button 
+                        type="button"
+                        onClick={() => { setUseExisting(false); setIsDirty(true); }}
+                        className={`flex-1 flex items-center justify-center py-2 rounded-md transition-all ${!useExisting ? 'bg-white shadow-sm text-black' : 'text-gray-600'}`}
+                    >
+                        <Plus className="h-4 w-4 mr-2" /> Nowa definicja
+                    </button>
+                </div>
+
                 <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
+                    
+                    {useExisting ? (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Atrybuty w systemie *
+                            </label>
+                            <select
+                                name="attributeId"
+                                value={formData.attributeId}
+                                onChange={handleChange}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-black"
+                                disabled={saving}
+                            >
+                                <option value="">-- Wybierz atrybut --</option>
+                                {globalAttributes.map(attr => (
+                                    <option key={attr.id} value={attr.id}>
+                                        {attr.name} ({attr.type})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    ) : (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Nazwa atrybutu *</label>
+                                <input
+                                    type="text"
+                                    name="name"
+                                    value={formData.name}
+                                    onChange={handleChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
+                                    placeholder="np. Materiał, Styl"
+                                    disabled={saving}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Typ danych *</label>
+                                <select
+                                    name="type"
+                                    value={formData.type}
+                                    onChange={handleChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-black"
+                                    disabled={saving}
+                                >
+                                    {attributeTypes.map(type => (
+                                        <option key={type} value={type}>{type}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </>
+                    )}
 
-                    <div>
-                        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                            Nazwa atrybutu *
-                        </label>
-                        <input
-                            type="text"
-                            id="name"
-                            name="name"
-                            value={formData.name}
-                            onChange={handleChange}
-                            required
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
-                            placeholder="Np. Kolor, Materiał, Waga"
-                            disabled={saving}
-                        />
+                    <div className="pt-4 border-t border-gray-100">
+                        <div className="flex items-start">
+                            <div className="flex items-center h-5">
+                                <input
+                                    type="checkbox"
+                                    id="isKeyAttribute"
+                                    name="isKeyAttribute"
+                                    checked={formData.isKeyAttribute}
+                                    onChange={handleChange}
+                                    className="h-4 w-4 text-black focus:ring-black border-gray-300 rounded"
+                                />
+                            </div>
+                            <div className="ml-3 text-sm">
+                                <label htmlFor="isKeyAttribute" className="font-medium text-gray-700">Atrybut kluczowy</label>
+                                <p className="text-gray-500">Zaznacz, jeśli ten atrybut ma służyć do filtrowania produktów w tej kategorii.</p>
+                            </div>
+                        </div>
                     </div>
 
-                    <div>
-                        <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">
-                            Typ atrybutu *
-                        </label>
-                        <select
-                            id="type"
-                            name="type"
-                            value={formData.type}
-                            onChange={handleChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black focus:border-black bg-white"
-                            disabled={saving}
-                        >
-                            {attributeTypes.map(type => (
-                                <option key={type} value={type}>{type}</option>
-                            ))}
-                        </select>
-                        <p className="mt-1 text-xs text-gray-500">Określa rodzaj danych (np. tekst, liczba).</p>
-                    </div>
-
-                    <div className="flex items-center">
-                        <input
-                            type="checkbox"
-                            id="isActive"
-                            name="isActive"
-                            checked={formData.isActive}
-                            onChange={handleChange}
-                            className="h-4 w-4 text-black focus:ring-black border-gray-300 rounded"
-                            disabled={saving}
-                        />
-                        <label htmlFor="isActive" className="ml-2 block text-sm font-medium text-gray-700">
-                            Atrybut jest aktywny
-                        </label>
-                    </div>
-
-                    {/* Przyciski akcji */}
-                    <div className="flex justify-end space-x-3 border-t border-gray-200 pt-4">
-                        <Link
-                            to={`/admin/categories/${categoryId}`}
+                    <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                        <button 
+                            type="button"
+                            onClick={handleCancelClick}
                             className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                            disabled={saving}
                         >
                             Anuluj
-                        </Link>
+                        </button>
                         <button
                             type="submit"
                             disabled={saving}
-                            className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                            className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center space-x-2"
                         >
                             {saving ? <Loader className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                            <span>{saving ? 'Zapisywanie...' : 'Utwórz atrybut'}</span>
+                            <span>{saving ? 'Zapisywanie...' : 'Dodaj atrybut'}</span>
                         </button>
                     </div>
                 </form>
             </div>
 
-            {/* Modal potwierdzenia dodania */}
+            {/* Modal potwierdzenia zapisu */}
             <ConfirmationModal
                 show={showConfirmModal}
-                onClose={() => {
-                    setShowConfirmModal(false);
-                    setDataToConfirm(null);
-                }}
+                onClose={() => setShowConfirmModal(false)}
                 onConfirm={confirmSubmit}
-                title="Potwierdź Dodanie Atrybutu"
-                message={`Czy na pewno chcesz dodać nowy atrybut "${dataToConfirm?.name || ''}" do kategorii "${categoryName}"?`}
-                confirmText="Dodaj atrybut"
-                cancelText="Wróć do formularza"
+                title="Potwierdź dodanie"
+                message={useExisting 
+                    ? "Czy na pewno chcesz przypisać ten atrybut do bieżącej kategorii?" 
+                    : `Czy chcesz utworzyć nową definicję "${formData.name}" i przypisać ją do kategorii?`}
+                confirmText="Tak, dodaj"
+                cancelText="Wróć"
                 type="success"
+                isProcessing={saving}
+            />
+
+            {/* Modal anulowania (isDirty) */}
+            <ConfirmationModal
+                show={showCancelModal}
+                onClose={() => setShowCancelModal(false)}
+                onConfirm={() => navigate(`/admin/categories/${categoryId}`)}
+                title={isDirty ? "Niezapisane zmiany" : "Potwierdź wyjście"}
+                message={isDirty 
+                    ? "Masz niezapisane zmiany w formularzu. Czy na pewno chcesz opuścić tę stronę? Dane zostaną utracone."
+                    : "Czy na pewno chcesz wrócić do widoku kategorii?"}
+                confirmText="Opuść stronę"
+                cancelText="Zostań"
+                type={isDirty ? "warning" : "info"}
                 isProcessing={saving}
             />
         </div>

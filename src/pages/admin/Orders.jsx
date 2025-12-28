@@ -11,13 +11,12 @@ const DEFAULT_PAGE_SIZE = 50;
 // Mapa tłumaczeń statusów zamówienia
 const orderStatusMap = {
     'NEW': 'Nowe',
-    'PENDING': 'W trakcie realizacji',
     'CONFIRMED': 'Potwierdzone',
+    'PROCESSING': 'W trakcie realizacji',
     'SHIPPED': 'Wysłane',
     'DELIVERED': 'Dostarczone',
-    'COMPLETED': 'Zakończone',
     'CANCELLED': 'Anulowane',
-    'FAILED': 'Błąd zamówienia',
+    'REFUNDED': 'Zwrócona płatność',
     'DEFAULT': 'Nieznany',
 };
 
@@ -41,16 +40,17 @@ export default function Orders() {
     // Funkcja zwracająca styl statusu
     const getStatusStyle = (status) => {
         switch (status) {
-            case 'DELIVERED':
-            case 'COMPLETED': return 'bg-green-100 text-green-800';
-            case 'SHIPPED': return 'bg-blue-100 text-blue-800';
-            case 'CONFIRMED': return 'bg-indigo-100 text-indigo-800';
-            case 'NEW': return 'bg-yellow-100 text-yellow-800';
-            case 'CANCELLED':
-            case 'FAILED': return 'bg-red-100 text-red-800';
-            case 'PENDING': return 'bg-orange-100 text-orange-800';
-            default: return 'bg-gray-100 text-gray-600';
-        }
+        case 'DELIVERED':
+        case 'COMPLETED': return 'bg-green-100 border-green-300 text-green-800';
+        case 'SHIPPED': return 'bg-blue-100 border-blue-300 text-blue-800';
+        case 'CONFIRMED': return 'bg-indigo-100 border-indigo-300 text-indigo-800';
+        case 'NEW': return 'bg-yellow-100 border-yellow-300 text-yellow-800';
+        case 'CANCELLED':
+        case 'FAILED': return 'bg-red-100 border-red-300 text-red-800';
+        case 'REFUNDED': return 'bg-purple-100 border-purple-300 text-purple-800';
+        case 'PROCESSING': return 'bg-orange-100 border-orange-300 text-orange-800';
+        default: return 'bg-gray-100 border-gray-300 text-gray-600';
+    }
     };
 
     // Funkcja tłumacząca status
