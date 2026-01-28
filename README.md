@@ -21,19 +21,22 @@ Aplikacja podzielona jest na dwie główne strefy: publiczną (sklep) oraz chron
 
 Panel dostępny jest wyłącznie dla użytkowników z rolą `ROLE_OWNER`. Obejmuje pełen zakres operacji CRUD (Create, Read, Update, Delete) na kluczowych zasobach sklepu.
 
-* **Moduł Kategorii:** Pełne operacje CRUD, zarządzanie hierarchią i statusami (`soft-delete`).
-* **Moduł Atrybutów:** Dynamiczne definiowanie atrybutów dla kategorii (np. 'Kolor', 'Rozmiar') z pełnym CRUD na definicjach.
-* **Moduł Produktów:** * Zaawansowana edycja i dodawanie produktów (ceny, opisy, SKU).
+* **Moduł Kategorii:** Pełne operacje CRUD, zarządzanie hierarchią i statusami.
+* **Moduł Atrybutów:** Dynamiczne definiowanie atrybutów dla kategorii z pełnym CRUD na definicjach.
+* **Moduł Produktów:**
+    * Zaawansowana edycja i dodawanie produktów.
     * **Dynamiczne Atrybuty Produktu:** Automatyczne renderowanie pól do wypełniania wartościami atrybutów na podstawie wybranej kategorii.
-* **Zarządzanie Mediami:** Wysyłanie wielu zdjęć, ustawianie miniaturki (`isThumbnail`) i zarządzanie tekstem alternatywnym (Alt Text) w ramach edycji produktu.
-* **Moduł Zamówień:** Przegląd i zarządzanie wszystkimi złożonymi zamówieniami.
+* **Zarządzanie Mediami:** Wysyłanie wielu zdjęć, ustawianie miniaturki  i zarządzanie tekstem alternatywnym.
+* **Moduł CMS i Ustawienia:** Zarządzanie stronami statycznymi (Regulamin, O nas), konfiguracja danych sklepu (logo, kontakt, social media) oraz edytor treści (Quill).
+* **Statystyki i Zamówienia:** Wizualizacja danych sprzedażowych oraz procesowanie zamówień.
 
 ### Strefa Użytkownika i Publiczna
 
-* **Uwierzytelnianie i Rejestracja:** Pełny proces logowania, rejestracji oraz resetowania hasła. Rejestracja wymaga aktywacji konta przez link wysłany na e-mail (token JWT).
-* **Koszyk i Checkout:** Lokalny stan koszyka (`CartContext`), dwuetapowa finalizacja zamówienia (wybór adresu, wybór płatności/akceptacja regulaminu).
-* **Katalog Publiczny:** Przeglądanie produktów, katalogu kategorii oraz szczegółów produktu.
-* **Trasy Chronione:** Wdrożono `ProtectedRoute` i `OwnerRoute` w oparciu o stan `AuthContext` dla pełnej kontroli dostępu.
+* **Uwierzytelnianie i Rejestracja:** Pełny proces logowania, rejestracji oraz resetowania hasła. Rejestracja wymaga aktywacji konta przez link e-mail.
+* **Koszyk i Checkout:** Lokalny stan koszyka , proces składania zamówienia z wyborem adresu i metody płatności.
+* **Katalog Publiczny:** Przeglądanie produktów, filtrowanie po kategoriach oraz szczegółowy widok produktu.
+* **Asystent AI:** Zintegrowany czatbot  wspomagający użytkownika w nawigacji i wyborze produktów.
+* **CMS Viewer:** Dynamiczne wyświetlanie stron informacyjnych stworzonych w panelu admina.
 
 ---
 
@@ -57,6 +60,7 @@ Aplikacja wykorzystuje przepływ oparty na `AuthContext` i interceptorach Axios,
 | **React Router** | Obsługa tras, nawigacji i tras chronionych. |
 | **Axios** | Klient HTTP z globalnym zarządzaniem tokenami (Interceptory). |
 | **Context API** | Globalne zarządzanie stanem (Auth, Cart). |
+| **React Quill** | Edytor tekstu WYSIWYG dla modułu CMS. |
 | **Lucide Icons** | Zestaw ikon SVG. |
 
 ---
@@ -96,20 +100,27 @@ Aplikacja będzie dostępna pod adresem: `http://localhost:5173` (lub innym woln
 
 ## 🧩 Struktura projektu
 
-Struktura projektu została zorganizowana z podziałem na logikę (services, context) i widoki (pages, components).
+Struktura została podzielona logicznie na moduły odpowiadające za widoki, logikę biznesową oraz komponenty współdzielone.
 
 ```
 src/
-├── assets/         # Pliki statyczne (ikony, obrazki)
-├── components/     # Komponenty globalne (Navbar, Footer, ScrollToTop)
-│   └── routes/     # Strażnicy tras (ProtectedRoute, OwnerRoute)
-├── context/        # Globalne stany (AuthContext, CartContext)
-├── pages/          # Widoki i strony (Home, Login, Publiczne Katalogi)
-│   ├── account/    # Strefa użytkownika (ProfileDetails, OrdersList)
-│   └── admin/      # Panel administracyjny
-│       └── components/ # Komponenty CRUD dla admina (ProductEdit, CategoryView)
-├── services/       # Logika biznesowa i API Clients
-│   └── api.js      # Centralna konfiguracja Axios (interceptory)
-├── App.jsx         # Główny router aplikacji
-└── main.jsx        # Punkt wejścia aplikacji
+├── 📁 assets/              # Zasoby statyczne (pliki graficzne, ikony SVG)
+│
+├── 📁 components/          # Globalne komponenty interfejsu
+│   └── 📁 routes/          # Komponenty strażników tras zarządzające dostępem
+│
+├── 📁 context/             # Globalne zarządzanie stanem aplikacji (Context API)
+│   # Zawiera logikę sesji użytkownika (Auth) oraz koszyka zakupowego (Cart)
+│
+├── 📁 pages/               # Główne widoki (strony) renderowane przez Router
+│   ├── 📁 account/         # Panel użytkownika zalogowanego (Profil, Zamówienia)
+│   ├── 📁 admin/           # Panel administracyjny (Dashboard, CMS, Zarządzanie sklepem)
+│   │   └── 📁 components/  # Komponenty specyficzne dla admina (formularze CRUD, tabele)
+│   └── (root)              # Widoki publiczne (Strona główna, Katalog, Logowanie, Checkout)
+│
+├── 📁 services/            # Warstwa komunikacji z API
+│   # Centralna konfiguracja klienta HTTP (Axios) oraz serwisy domenowe
+│   # (np. authService, productService, settingsService)
+│
+└── 📁 utils/               # Pliki konfiguracyjne, style globalne i punkt wejściowy aplikacji
 ```

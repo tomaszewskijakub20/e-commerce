@@ -7,3 +7,42 @@ a {
   text-decoration: none;
   color: inherit;
 }
+
+/* Style dla treści z Quill Editor */
+.ql-align-center {
+  text-align: center;
+}
+.ql-align-right {
+  text-align: right;
+}
+.ql-align-justify {
+  text-align: justify;
+}
+
+/* Wcięcia (Indents) */
+.ql-indent-1 {
+  padding-left: 2em;
+}
+.ql-indent-2 {
+  padding-left: 4em;
+}
+.ql-indent-3 {
+  padding-left: 6em;
+}
+
+/* Rozmiar czcionki */
+.ql-size-small {
+  font-size: 0.75em;
+}
+.ql-size-large {
+  font-size: 1.5em;
+}
+.ql-size-huge {
+  font-size: 2.5em;
+}
+
+/* Poprawka dla list wewnątrz wcięć */
+li.ql-indent-1 {
+    margin-left: 2em;
+    padding-left: 0;
+}

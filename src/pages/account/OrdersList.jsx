@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { orderService } from '../../services/orderService';
-import { Loader, ShoppingBag, Calendar, CheckCircle } from 'lucide-react';
+import { Loader, ShoppingBag, Calendar, CheckCircle, User } from 'lucide-react'; // Dodano ikonę User
 
 export default function OrdersList() {
     const { userData } = useOutletContext();
@@ -113,8 +113,19 @@ export default function OrdersList() {
                     {userOrders.map(order => (
                         <div key={order.id} className="border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow flex justify-between items-center">
                             <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-center border-b pb-3 mb-3">
-                                    <h4 className="font-semibold text-gray-900">Zamówienie #{order.id}</h4>
+                                <div className="flex justify-between items-start border-b pb-3 mb-3">
+                                    <div>
+                                        <h4 className="font-semibold text-gray-900 text-lg">
+                                            Zamówienie #{order.id}
+                                        </h4>
+                                        <div className="flex items-center text-sm text-gray-500 mt-1">
+                                            <User className="h-3 w-3 mr-1" />
+                                            <span>
+                                                {order.firstName} {order.lastName}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
                                     <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusStyle(order.status)}`}>
                                         {translateStatus(order.status)}
                                     </span>

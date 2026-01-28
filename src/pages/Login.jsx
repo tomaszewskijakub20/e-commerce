@@ -216,12 +216,7 @@ export default function Login() {
           </div>
         </form>
 
-        {/* Informacja o testowych kontach */}
-        <div className="text-center text-xs text-gray-500 mt-6 p-4 bg-gray-50 rounded-lg">
-          <p className="font-medium mb-1">Konta testowe:</p>
-          <p>Właściciel: owner@example.com / Password</p>
-          <p>Użytkownik: user@example.com / Password</p>
-        </div>
+        
       </div>
     </div>
   );

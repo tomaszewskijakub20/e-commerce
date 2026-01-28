@@ -8,7 +8,7 @@ import { addressService } from '../services/addressService';
 import {
     Loader, MapPin, CreditCard, CheckCircle, XCircle, ShoppingBag,
     PlusCircle, X, Edit3, Trash2, Save, Home, ArrowLeft,
-    AlertTriangle, Info
+    AlertTriangle, Info, User
 } from 'lucide-react';
 
 // Stałe: Lista polskich województw
@@ -24,28 +24,37 @@ const paymentMethods = [
     { id: 'CREDIT_CARD', name: 'Karta Kredytowa/Debetowa', icon: CreditCard },
     { id: 'DEBIT_CARD', name: 'Karta Debetowa', icon: CreditCard },
     { id: 'PAYPAL', name: 'PayPal', icon: CreditCard },
-    { id: 'BANK_TRANSFER', name: 'Tradycyjny Przelew', icon: CreditCard },
     { id: 'BLIK', name: 'BLIK', icon: CreditCard },
     { id: 'CASH_ON_DELIVERY', name: 'Płatność przy odbiorze', icon: CreditCard },
 ];
 
 const PAYMENT_MOCK_SCENARIO = 'SUCCESS';
 
-// Komponent uniwersalnego modalu potwierdzenia
-const ConfirmationModal = ({
-    show, onClose, title, message, onConfirm,
-    confirmText = 'Potwierdź', cancelText = 'Anuluj',
-    type = 'info', isProcessing = false
-}) => {
-    if (!show) return null;
+// Funkcja pomocnicza do formatowania kodu pocztowego (00-000)
+const formatPostalCode = (value) => {
+    // 1. Usuń wszystko co nie jest cyfrą
+    const digits = value.replace(/\D/g, '');
+    
+    // 2. Ogranicz do 5 cyfr
+    const truncated = digits.slice(0, 5);
 
+    // 3. Dodaj myślnik po 2 cyfrach
+    if (truncated.length > 2) {
+        return `${truncated.slice(0, 2)}-${truncated.slice(2)}`;
+    }
+    
+    return truncated;
+};
+
+// --- Komponenty pomocnicze (Modale) ---
+
+const ConfirmationModal = ({ show, onClose, title, message, onConfirm, confirmText = 'Potwierdź', cancelText = 'Anuluj', type = 'info', isProcessing = false }) => {
+    if (!show) return null;
     const styles = {
         success: { Icon: CheckCircle, iconColor: 'text-green-600', confirmBg: 'bg-green-600 hover:bg-green-700' },
         danger: { Icon: XCircle, iconColor: 'text-red-600', confirmBg: 'bg-red-600 hover:bg-red-700' },
-        warning: { Icon: AlertTriangle, iconColor: 'text-yellow-500', confirmBg: 'bg-yellow-600 hover:bg-yellow-700' },
         info: { Icon: Info, iconColor: 'text-blue-500', confirmBg: 'bg-blue-600 hover:bg-blue-700' },
     };
-
     const { Icon, iconColor, confirmBg } = styles[type] || styles.info;
 
     return (
@@ -56,28 +65,13 @@ const ConfirmationModal = ({
                         <Icon className={`h-6 w-6 mr-3 ${iconColor}`} />
                         <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-4" disabled={isProcessing}>
-                        <X className="h-5 w-5" />
-                    </button>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-4" disabled={isProcessing}><X className="h-5 w-5" /></button>
                 </div>
-
                 <p className="text-sm text-gray-600 mb-6">{message}</p>
-
                 <div className="flex justify-end space-x-3">
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                        disabled={isProcessing}
-                    >
-                        {cancelText}
-                    </button>
-                    <button
-                        onClick={onConfirm}
-                        className={`px-4 py-2 text-white rounded-lg ${confirmBg} disabled:opacity-50 flex items-center`}
-                        disabled={isProcessing}
-                    >
-                        {isProcessing ? <Loader className="h-4 w-4 animate-spin mr-2" /> : null}
-                        {confirmText}
+                    <button onClick={onClose} className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled={isProcessing}>{cancelText}</button>
+                    <button onClick={onConfirm} className={`px-4 py-2 text-white rounded-lg ${confirmBg} disabled:opacity-50 flex items-center`} disabled={isProcessing}>
+                        {isProcessing && <Loader className="h-4 w-4 animate-spin mr-2" />}{confirmText}
                     </button>
                 </div>
             </div>
@@ -85,151 +79,126 @@ const ConfirmationModal = ({
     );
 };
 
-// Komponent sukcesu zamówienia
-const OrderSuccessModal = ({ show, orderId, successMessage, onClose, navigate }) => {
+const OrderSuccessModal = ({ show, orderId, successMessage, onClose, navigate, isGuest }) => {
     if (!show) return null;
-
-    const handleNavigate = (path) => {
-        onClose();
-        navigate(path);
-    };
-
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-lg w-full p-8 shadow-2xl text-center border border-gray-200">
                 <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
                 <h2 className="text-3xl font-bold text-gray-900 mb-2">Zamówienie złożone pomyślnie!</h2>
-                <p className="text-lg text-gray-600 mb-6">{successMessage || "Dziękujemy za zakupy. Status zamówienia możesz sprawdzić na swoim koncie."}</p>
+                <p className="text-lg text-gray-600 mb-6">{successMessage}</p>
                 <div className="flex justify-center space-x-3">
-                    <button
-                        onClick={() => handleNavigate('/')}
-                        className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
-                    >
-                        <Home className="h-5 w-5" /> <span>Wróć do strony głównej</span>
+                    <button onClick={() => { onClose(); navigate('/'); }} className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2">
+                        <Home className="h-5 w-5" /> <span>Strona główna</span>
                     </button>
-                    <button
-                        onClick={() => handleNavigate(`/account/orders/${orderId}`)}
-                        className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center space-x-2"
-                    >
-                        <ShoppingBag className="h-5 w-5" /> Szczegóły zamówienia
-                    </button>
+                    {!isGuest && (
+                        <button onClick={() => { onClose(); navigate(`/account/orders/${orderId}`); }} className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center space-x-2">
+                            <ShoppingBag className="h-5 w-5" /> Szczegóły zamówienia
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
     );
 };
 
-// Komponent modalny dla formularza adresu
-const AddressModal = ({ show, onClose, addressToEdit, onSuccess, onError, isProcessing }) => {
+// Modal edycji adresu (Tylko dla zalogowanych)
+const AddressModal = ({ show, onClose, addressToEdit, onSuccess, isProcessing }) => {
     const isEdit = !!addressToEdit;
-    const [formData, setFormData] = useState({
-        line1: '', line2: '', city: '', region: '', postalCode: '', country: 'Polska', isActive: true,
-    });
-
-    const [validationErrors, setValidationErrors] = useState({});
+    const [formData, setFormData] = useState({ line1: '', line2: '', city: '', region: POLISH_REGIONS[0], postalCode: '', country: 'Polska', isActive: true });
+    const [errors, setErrors] = useState({});
 
     useEffect(() => {
         if (show) {
-            setFormData(isEdit ? {
-                line1: addressToEdit.line1 || '', line2: addressToEdit.line2 || '', city: addressToEdit.city || '',
-                region: addressToEdit.region || POLISH_REGIONS[0], postalCode: addressToEdit.postalCode || '',
-                country: addressToEdit.country || 'Polska', isActive: addressToEdit.isActive !== undefined ? addressToEdit.isActive : true,
-            } : {
-                line1: '', line2: '', city: '', region: POLISH_REGIONS[0], postalCode: '', country: 'Polska', isActive: true,
-            });
+            setFormData(isEdit ? { ...addressToEdit, country: 'Polska' } : { line1: '', line2: '', city: '', region: POLISH_REGIONS[0], postalCode: '', country: 'Polska', isActive: true });
+            setErrors({});
         }
-        setValidationErrors({});
     }, [isEdit, addressToEdit, show]);
 
     if (!show) return null;
 
-    const validateForm = () => {
-        const errors = {};
-        if (!formData.line1.trim()) errors.line1 = "Adres jest wymagany.";
+    const validate = () => {
+        const newErrors = {};
+        if (!formData.line1.trim()) newErrors.line1 = "Adres jest wymagany";
+        if (!formData.city.trim()) newErrors.city = "Miasto jest wymagane";
+        if (!formData.postalCode.trim()) newErrors.postalCode = "Kod pocztowy jest wymagany";
+        else if (!/^\d{2}-\d{3}$/.test(formData.postalCode)) newErrors.postalCode = "Format XX-XXX";
+        
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
 
-        const cityValue = formData.city.trim();
-        if (!cityValue) {
-            errors.city = "Miasto jest wymagane.";
-        } else if (!/^[A-ZŁŚĆŻŹŃÓĘĄa-złśćżźńóęą\s-]+$/i.test(cityValue)) {
-            errors.city = "Nieprawidłowe znaki w nazwie miasta (dozwolone litery, spacja i '-').";
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (validate()) {
+            onSuccess({ data: formData, isEdit, id: addressToEdit?.id });
         }
-
-        const postalCodeValue = formData.postalCode.trim();
-        if (!postalCodeValue) {
-            errors.postalCode = "Kod pocztowy jest wymagany.";
-        } else if (!/^\d{2}-\d{3}$/.test(postalCodeValue)) {
-            errors.postalCode = "Nieprawidłowy format kodu pocztowego (Oczekiwany format: XX-XXX).";
-        }
-
-        if (!formData.country.trim()) errors.country = "Kraj jest wymagany.";
-
-        setValidationErrors(errors);
-        return Object.keys(errors).length === 0;
     };
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
-        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
-    };
+        let newValue = type === 'checkbox' ? checked : value;
 
-    const handleFormSubmit = (e) => {
-        e.preventDefault();
-        if (validateForm()) {
-            // Przekazanie danych do komponentu nadrzędnego po walidacji
-            onSuccess({ data: formData, isEdit: isEdit, id: addressToEdit?.id });
+        // Wymuszanie formatowania kodu pocztowego w Modalu
+        if (name === 'postalCode') {
+            newValue = formatPostalCode(value);
         }
+
+        setFormData(prev => ({ ...prev, [name]: newValue }));
+        
+        // Usuwanie błędu przy wpisywaniu
+        if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-lg w-full p-6 shadow-xl">
                 <div className="flex justify-between items-center mb-4 border-b pb-2">
-                    <h3 className="text-xl font-semibold text-gray-900">
-                        {isEdit ? 'Edytuj adres' : 'Dodaj nowy adres'}
-                    </h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600" disabled={isProcessing}>
-                        <X className="h-5 w-5" />
-                    </button>
+                    <h3 className="text-xl font-semibold">{isEdit ? 'Edytuj adres' : 'Dodaj nowy adres'}</h3>
+                    <button onClick={onClose}><X className="h-5 w-5" /></button>
                 </div>
-
-                <form onSubmit={handleFormSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                        {/* Wiersz 1: Adres 1 i Adres 2 */}
-                        <div><label className="block text-sm font-medium text-gray-700">Adres 1 *</label><input type="text" name="line1" value={formData.line1} onChange={handleChange} required className={`w-full px-3 py-2 border rounded-lg ${validationErrors.line1 ? 'border-red-500' : 'border-gray-300'}`} disabled={isProcessing} /><p className="text-xs text-red-500 mt-1">{validationErrors.line1}</p></div>
-                        <div><label className="block text-sm font-medium text-gray-700">Adres 2 (Opcjonalnie)</label><input type="text" name="line2" value={formData.line2} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg" disabled={isProcessing} /></div>
-
-                        {/* Wiersz 2: Miasto i Kod pocztowy */}
-                        <div><label className="block text-sm font-medium text-gray-700">Miasto *</label><input type="text" name="city" value={formData.city} onChange={handleChange} required className={`w-full px-3 py-2 border rounded-lg ${validationErrors.city ? 'border-red-500' : 'border-gray-300'}`} disabled={isProcessing} /><p className="text-xs text-red-500 mt-1">{validationErrors.city}</p></div>
-                        <div><label className="block text-sm font-medium text-gray-700">Kod pocztowy *</label><input type="text" name="postalCode" value={formData.postalCode} onChange={handleChange} required className={`w-full px-3 py-2 border rounded-lg ${validationErrors.postalCode ? 'border-red-500' : 'border-gray-300'}`} disabled={isProcessing} /><p className="text-xs text-red-500 mt-1">{validationErrors.postalCode}</p></div>
-
-                        {/* Wiersz 3: Region i Kraj */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Region/Województwo *</label>
-                            <select name="region" value={formData.region} onChange={handleChange} required className={`w-full px-3 py-2 border rounded-lg ${validationErrors.region ? 'border-red-500' : 'border-gray-300'} bg-white`} disabled={isProcessing} >
-                                {POLISH_REGIONS.map(region => (
-                                    <option key={region} value={region}>{region}</option>
-                                ))}
-                            </select>
-                            <p className="text-xs text-red-500 mt-1">{validationErrors.region}</p>
+                            <label className="text-sm font-medium">Adres 1 *</label>
+                            <input name="line1" value={formData.line1} onChange={handleChange} disabled={isProcessing} className={`w-full border rounded p-2 ${errors.line1 ? 'border-red-500' : ''}`}/>
+                            {errors.line1 && <p className="text-red-500 text-xs mt-1">{errors.line1}</p>}
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Kraj *</label>
-                            <input type="text" name="country" value={formData.country} onChange={handleChange} required className={`w-full px-3 py-2 border rounded-lg border-gray-300 bg-gray-100`} disabled />
+                            <label className="text-sm font-medium">Adres 2</label>
+                            <input name="line2" value={formData.line2} onChange={handleChange} disabled={isProcessing} className="w-full border rounded p-2"/>
                         </div>
+                        <div>
+                            <label className="text-sm font-medium">Miasto *</label>
+                            <input name="city" value={formData.city} onChange={handleChange} disabled={isProcessing} className={`w-full border rounded p-2 ${errors.city ? 'border-red-500' : ''}`}/>
+                            {errors.city && <p className="text-red-500 text-xs mt-1">{errors.city}</p>}
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Kod pocztowy *</label>
+                            <input 
+                                name="postalCode" 
+                                placeholder="00-000" 
+                                value={formData.postalCode} 
+                                onChange={handleChange} 
+                                disabled={isProcessing} 
+                                className={`w-full border rounded p-2 ${errors.postalCode ? 'border-red-500' : ''}`}
+                                maxLength={6}
+                            />
+                            {errors.postalCode && <p className="text-red-500 text-xs mt-1">{errors.postalCode}</p>}
+                        </div>
+                        <div>
+                             <label className="text-sm font-medium">Region *</label>
+                             <select name="region" value={formData.region} onChange={handleChange} disabled={isProcessing} className="w-full border rounded p-2 bg-white">
+                                {POLISH_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                             </select>
+                        </div>
+                        <div><label className="text-sm font-medium">Kraj</label><input disabled className="w-full border rounded p-2 bg-gray-100" value="Polska"/></div>
                     </div>
-
-                    <div className="flex items-center">
-                        <input type="checkbox" id="isActive" name="isActive" checked={formData.isActive} onChange={handleChange} className="h-4 w-4 text-black focus:ring-black border-gray-300 rounded" disabled={isProcessing} />
-                        <label htmlFor="isActive" className="ml-2 block text-sm text-gray-700">Adres jest aktywny</label>
-                    </div>
-
-                    <div className="flex justify-end space-x-3 pt-2">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50" disabled={isProcessing}>
-                            Anuluj
-                        </button>
-                        <button type="submit" className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 flex items-center space-x-2" disabled={isProcessing}>
-                            {isProcessing ? <Loader className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                            <span>{isEdit ? 'Potwierdź zmiany' : 'Dodaj adres'}</span>
+                    <div className="flex items-center"><input type="checkbox" name="isActive" checked={formData.isActive} onChange={handleChange} className="mr-2"/><label>Aktywny</label></div>
+                    <div className="flex justify-end gap-2">
+                        <button type="button" onClick={onClose} className="px-4 py-2 border rounded">Anuluj</button>
+                        <button type="submit" className="px-4 py-2 bg-black text-white rounded flex items-center" disabled={isProcessing}>
+                             {isProcessing && <Loader className="h-4 w-4 animate-spin mr-2" />} Zapisz
                         </button>
                     </div>
                 </form>
@@ -238,552 +207,455 @@ const AddressModal = ({ show, onClose, addressToEdit, onSuccess, onError, isProc
     );
 };
 
-
+// Główny komponent checkout
 export default function Checkout() {
     const { user, isAuthenticated } = useAuth();
     const { cartItems, getCartTotals, clearCart, cartCount } = useCart();
     const navigate = useNavigate();
-
     const { subtotal, shippingCost, total } = getCartTotals();
 
+    // Główny stan
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
 
+    // Stan dla Użytkownika (Adresy)
     const [addresses, setAddresses] = useState([]);
-    const [addressesLoading, setAddressesLoading] = useState(true);
-
-    // Stany dla modala adresów (Formularz)
+    const [addressesLoading, setAddressesLoading] = useState(false);
     const [showAddressModal, setShowAddressModal] = useState(false);
     const [addressToEdit, setAddressToEdit] = useState(null);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [addressToDelete, setAddressToDelete] = useState(null);
 
-    // Stany dla modala potwierdzenia usunięcia
-    const [showDeleteAddressModal, setShowDeleteAddressModal] = useState(false);
-    const [addressToDeleteId, setAddressToDeleteId] = useState(null);
-
-    // Stany dla modala potwierdzenia zapisu adresu
-    const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
-    const [addressDataToSave, setAddressDataToSave] = useState(null);
-    const [isAddressSaving, setIsAddressSaving] = useState(false); // Stan ładowania dla operacji adresowych
-
-    // Stan formularza Checkout
-    const [checkoutData, setCheckoutData] = useState({
-        selectedAddressId: null,
-        selectedPaymentMethod: paymentMethods[0]?.id || null,
-        orderId: null,
-        serverTotalAmount: null,
-        paymentId: null,
+    // Stan dla Gościa (Formularz)
+    const [guestData, setGuestData] = useState({
+        email: '', firstName: '', lastName: '', phone: '',
+        addressLine1: '', addressLine2: '', city: '', region: POLISH_REGIONS[0], postalCode: '', country: 'Polska'
     });
+    // Stan błędów walidacji formularza gościa
+    const [guestErrors, setGuestErrors] = useState({});
 
-    // Wymagana zgoda na regulamin w Kroku 2
+    // Stan wspólny Checkout
+    const [selectedAddressId, setSelectedAddressId] = useState(null); // Tylko dla zalogowanych
+    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(paymentMethods[0].id);
+    const [orderId, setOrderId] = useState(null);
+    const [serverTotalAmount, setServerTotalAmount] = useState(null);
     const [isTermsAccepted, setIsTermsAccepted] = useState(false);
 
-
-    // Funkcja do ładowania adresów użytkownika
+    // Pobieranie adresów (tylko zalogowany)
     const fetchAddresses = useCallback(async () => {
-        const userId = user?.id;
-        if (!userId) {
-            setAddressesLoading(false);
-            return;
-        }
-
+        if (!user?.id) return;
         setAddressesLoading(true);
-        setError(null);
         try {
-            const userAddresses = await addressService.getAddresses(userId);
-            const addressList = Array.isArray(userAddresses) ? userAddresses : [];
-            setAddresses(addressList);
+            const data = await addressService.getAddresses(user.id);
+            const list = Array.isArray(data) ? data : [];
+            setAddresses(list);
+            if (list.length > 0 && !selectedAddressId) setSelectedAddressId(list[0].id);
+        } catch (err) { console.error(err); setError("Błąd pobierania adresów."); }
+        finally { setAddressesLoading(false); }
+    }, [user?.id, selectedAddressId]);
 
-            if (addressList.length > 0) {
-                // Ustawienie domyślnego/zapamiętanego adresu
-                setCheckoutData(prev => ({
-                    ...prev,
-                    selectedAddressId: prev.selectedAddressId && addressList.some(a => a.id === prev.selectedAddressId)
-                        ? prev.selectedAddressId
-                        : addressList[0].id
-                }));
-            } else {
-                setCheckoutData(prev => ({ ...prev, selectedAddressId: null }));
-            }
-        } catch (err) {
-            console.error("Błąd pobierania adresów w Checkout:", err);
-            setError("Nie udało się załadować adresów. Sprawdź połączenie.");
-        } finally {
-            setAddressesLoading(false);
-        }
-    }, [user?.id]);
-
-
-    // Weryfikacja Auth i Ładowanie Adresów
     useEffect(() => {
-        if (!isAuthenticated) {
-            navigate('/login', { state: { from: '/checkout' } });
-            return;
-        }
+        // Jeśli pusty koszyk i brak zamówienia -> powrót
+        if (cartCount === 0 && !orderId) navigate('/cart');
+        
+        if (isAuthenticated) fetchAddresses();
+    }, [isAuthenticated, cartCount, navigate, fetchAddresses, orderId]);
 
-        // Jeśli koszyk jest pusty i nie ma jeszcze ID zamówienia, wróć do koszyka
-        if (cartCount === 0 && !checkoutData.orderId) {
-            navigate('/cart');
-            return;
-        }
+    // Formatowanie ceny
+    const formatPrice = (p) => new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(p || 0);
 
-        if (user?.id) {
-            fetchAddresses();
-        }
-    }, [isAuthenticated, cartCount, navigate, fetchAddresses, user?.id, checkoutData.orderId]);
-
-
-    const formatPrice = (price) => {
-        return new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(price || 0);
-    };
-
-    // Właściwy zapis/edycja adresu (po potwierdzeniu)
-    const handleSaveAddress = async () => {
-        if (!addressDataToSave) return;
-
-        const { data: formData, isEdit, id } = addressDataToSave;
-
-        setShowSaveConfirmModal(false);
-        setIsAddressSaving(true);
-        setError(null);
-
+    // Obsługa zalogowanego użytkownika (Adresy)
+    const handleSaveAddress = async ({ data, isEdit, id }) => {
+        setShowAddressModal(false); setLoading(true);
         try {
-            const action = isEdit
-                ? addressService.updateAddress(id, formData)
-                : addressService.addAddress(formData);
-
-            await action;
-            const message = isEdit ? `Adres zaktualizowany pomyślnie.` : `Nowy adres dodany pomyślnie.`;
-
-            // Po pomyślnym zapisie:
-            setShowAddressModal(false); // Zamknij modal formularza
-            setAddressToEdit(null);
-            await fetchAddresses(); // Przeładuj listę i zaktualizuj selectedAddressId
-            setSuccess(message); // Pokaż sukces
-
-        } catch (err) {
-            const errMsg = err.response?.data?.message || "Wystąpił błąd podczas komunikacji z serwerem.";
-            setError("Błąd serwera podczas zapisu adresu: " + errMsg);
-        } finally {
-            setIsAddressSaving(false);
-            setAddressDataToSave(null);
-        }
-    };
-
-    // Obsługa Modala Adresowego (otwiera modal potwierdzenia po walidacji)
-    const handleAddressSuccess = (addressData) => {
-        setAddressDataToSave(addressData);
-        setShowSaveConfirmModal(true); // Otwórz ujednolicony modal potwierdzenia
-    };
-
-    const handleOpenAddressModal = (address = null) => {
-        setError(null);
-        setSuccess(null);
-        setAddressToEdit(address);
-        setShowAddressModal(true);
-    };
-
-    // Otwarcie modala usuwania adresu
-    const handleConfirmDelete = (addressId) => {
-        setError(null);
-        setSuccess(null);
-        setAddressToDeleteId(addressId);
-        setShowDeleteAddressModal(true);
+            if (isEdit) await addressService.updateAddress(id, data);
+            else await addressService.addAddress(data);
+            await fetchAddresses();
+            setSuccess(isEdit ? "Adres zaktualizowany." : "Adres dodany.");
+        } catch(e) { setError("Błąd zapisu adresu."); }
+        finally { setLoading(false); }
     };
 
     const handleDeleteAddress = async () => {
-        const addressId = addressToDeleteId;
-        if (!addressId) return;
-
-        setShowDeleteAddressModal(false);
-        setLoading(true);
+        setShowDeleteModal(false); setLoading(true);
         try {
-            await addressService.deleteAddress(addressId);
-            await fetchAddresses(); // Przeładowanie listy
-            setSuccess("Adres usunięty pomyślnie.");
-        } catch (err) {
-            setError("Nie udało się usunąć adresu.");
-        } finally {
-            setLoading(false);
-            setAddressToDeleteId(null);
-        }
-    }
+            await addressService.deleteAddress(addressToDelete);
+            await fetchAddresses();
+            setSuccess("Adres usunięty.");
+        } catch(e) { setError("Błąd usuwania adresu."); }
+        finally { setLoading(false); }
+    };
 
+    // Obsługa gościa (Formularz)
+    const handleGuestChange = (e) => {
+        const { name, value } = e.target;
+        let newValue = value;
+
+        // Wymuszanie formatowania kodu pocztowego dla Gościa
+        if (name === 'postalCode') {
+            newValue = formatPostalCode(value);
+        }
+
+        setGuestData(prev => ({ ...prev, [name]: newValue }));
+        
+        // Usuwanie błędu po wpisaniu znaku
+        if (guestErrors[name]) {
+            setGuestErrors(prev => ({ ...prev, [name]: null }));
+        }
+    };
+
+    // Walidacja formularza gościa
+    const validateGuestForm = () => {
+        const errors = {};
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const postalCodeRegex = /^\d{2}-\d{3}$/;
+
+        if (!guestData.email.trim()) errors.email = "Email jest wymagany";
+        else if (!emailRegex.test(guestData.email)) errors.email = "Niepoprawny format email";
+
+        if (!guestData.phone.trim()) errors.phone = "Telefon jest wymagany";
+        if (!guestData.firstName.trim()) errors.firstName = "Imię jest wymagane";
+        if (!guestData.lastName.trim()) errors.lastName = "Nazwisko jest wymagane";
+        if (!guestData.addressLine1.trim()) errors.addressLine1 = "Adres jest wymagany";
+        if (!guestData.city.trim()) errors.city = "Miasto jest wymagane";
+        
+        if (!guestData.postalCode.trim()) errors.postalCode = "Kod pocztowy jest wymagany";
+        else if (!postalCodeRegex.test(guestData.postalCode)) errors.postalCode = "Format XX-XXX";
+
+        setGuestErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
 
     // Krok 1: Tworzenie zamówienia
-    const handleCreateOrder = async () => {
-        if (addressesLoading) return;
-        if (!checkoutData.selectedAddressId) {
-            setError("Wybierz adres dostawy, aby kontynuować.");
-            return;
-        }
-        if (cartItems.length === 0) {
-            setError("Koszyk jest pusty.");
-            return;
+    const handleCreateOrder = async (e) => {
+        e.preventDefault();
+        setError(null);
+
+        // Walidacja koszyka
+        if (cartItems.length === 0) return setError("Koszyk jest pusty.");
+        
+        // Walidacja Zalogowanego: czy wybrano adres
+        if (isAuthenticated && !selectedAddressId) return setError("Wybierz adres dostawy.");
+        
+        // Walidacja Gościa
+        if (!isAuthenticated) {
+            if (!validateGuestForm()) {
+                setError("Proszę poprawić błędy w formularzu.");
+                return;
+            }
         }
 
         setLoading(true);
-        setError(null);
-        setSuccess(null);
-
         try {
-            const orderItems = cartItems.map(item => ({
-                productId: item.productId,
-                quantity: item.quantity,
-            }));
+            const items = cartItems.map(i => ({ productId: i.productId, quantity: i.quantity }));
+            let response;
 
-            const orderPayload = {
-                addressId: checkoutData.selectedAddressId,
-                status: "NEW",
-                items: orderItems,
-            };
-
-            // Wysłanie zamówienia do serwera
-            const orderResponse = await orderService.createOrder(orderPayload);
-
-            if (!orderResponse || !orderResponse.id || orderResponse.totalAmount === undefined || orderResponse.totalAmount === null) {
-                throw new Error("Serwer nie zwrócił ID ani ostatecznej kwoty zamówienia (totalAmount).");
+            if (isAuthenticated) {
+                // Tryb Zalogowany: wysyłamy addressId
+                response = await orderService.createOrder({
+                    addressId: selectedAddressId,
+                    status: "NEW",
+                    items
+                });
+            } else {
+                // Tryb Gość: wysyłamy pełne dane
+                response = await orderService.createGuestOrder({
+                    ...guestData,
+                    items
+                });
             }
 
-            setCheckoutData(prev => ({
-                ...prev,
-                orderId: orderResponse.id,
-                serverTotalAmount: orderResponse.totalAmount
-            }));
-
-            setLoading(false);
-            setStep(2); // Przejście do Kroku 2: Płatność
-
+            setOrderId(response.id);
+            setServerTotalAmount(response.totalAmount);
+            setStep(2); // Przejście do płatności
         } catch (err) {
-            console.error("Błąd tworzenia zamówienia:", err.response || err);
-            setError("Nie udało się utworzyć zamówienia. Spróbuj ponownie. Szczegóły: " + (err.response?.data?.message || err.message));
+            console.error(err);
+            setError("Błąd tworzenia zamówienia: " + (err.response?.data?.message || err.message));
+        } finally {
             setLoading(false);
         }
     };
 
-    // Krok 2: Inicjacja i symulacja płatności
+    // Krok 2: Płatność
     const handleInitiatePayment = async () => {
-        if (!checkoutData.selectedPaymentMethod || !checkoutData.orderId) {
-            setError("Brak wybranej metody płatności lub ID zamówienia.");
-            return;
-        }
-        if (!isTermsAccepted) {
-            setError("Musisz zaakceptować Regulamin i Politykę Prywatności.");
-            return;
-        }
-        // Sprawdzamy kwotę z serwera
-        if (!checkoutData.serverTotalAmount) {
-            setError("Brak kwoty zamówienia z serwera. Wróć do Kroku 1.");
-            return;
-        }
-
+        if (!isTermsAccepted) return setError("Zaakceptuj regulamin.");
         setLoading(true);
         setError(null);
 
         try {
-            const finalAmount = parseFloat(checkoutData.serverTotalAmount);
+            const amount = parseFloat(serverTotalAmount);
+            let paymentRes;
 
-            // Wspólny obiekt payload dla obu ścieżek
-            const basePaymentPayload = {
-                orderId: checkoutData.orderId,
-                amount: finalAmount, // Kwota z wliczoną dostawą
-                method: checkoutData.selectedPaymentMethod,
-                transactionId: `${checkoutData.selectedPaymentMethod === 'CASH_ON_DELIVERY' ? 'COD' : 'TXN'}-${Date.now()}`,
-                notes: `Płatność za zamówienie #${checkoutData.orderId}`,
+            const basePayload = {
+                orderId: orderId,
+                amount: amount,
+                method: selectedPaymentMethod,
+                transactionId: `${selectedPaymentMethod === 'CASH_ON_DELIVERY' ? 'COD' : 'TXN'}-${Date.now()}`,
+                notes: isAuthenticated ? 'User payment' : 'Guest payment'
             };
 
-            const paymentResponse = await paymentService.createPayment(basePaymentPayload);
+            if (isAuthenticated) {
+                 paymentRes = await paymentService.createPayment(basePayload);
+            } else {
+                 // Dla gościa musimy dodać email do payloadu płatności
+                 paymentRes = await paymentService.createGuestPayment({
+                     ...basePayload,
+                     email: guestData.email
+                 });
+            }
 
-            if (checkoutData.selectedPaymentMethod === 'CASH_ON_DELIVERY') {
-                setSuccess(`Zamówienie złożone. Do zapłaty przy odbiorze: ${formatPrice(finalAmount)}`);
+            // Obsługa pobrania
+            if (selectedPaymentMethod === 'CASH_ON_DELIVERY') {
+                setSuccess(`Zamówienie przyjęte. Płatność przy odbiorze: ${formatPrice(amount)}`);
                 clearCart();
                 setStep(3);
-                setLoading(false);
                 return;
             }
 
-            // Symulacja Bramki Płatniczej (dla płatności online)
-            const simulateResponse = await paymentService.simulatePayment(paymentResponse.id, PAYMENT_MOCK_SCENARIO);
+            // Symulacja płatności online
+            let simulateRes;
+            if (isAuthenticated) {
+                simulateRes = await paymentService.simulatePayment(paymentRes.id, PAYMENT_MOCK_SCENARIO);
+            } else {
+                simulateRes = await paymentService.simulateGuestPayment(paymentRes.id, guestData.email, PAYMENT_MOCK_SCENARIO);
+            }
 
-            if (simulateResponse.status === 'COMPLETED') {
-                setSuccess(`Opłacono pomyślnie: ${formatPrice(finalAmount)}`);
+            if (simulateRes.status === 'COMPLETED') {
+                setSuccess(`Opłacono pomyślnie: ${formatPrice(amount)}`);
                 clearCart();
                 setStep(3);
             } else {
-                setError(`Płatność odrzucona. Status: ${simulateResponse.status}.`);
+                setError(`Płatność odrzucona (Status: ${simulateRes.status}).`);
             }
 
         } catch (err) {
-            console.error("Błąd płatności:", err.response || err);
-            setError(err.response?.data?.message || "Wystąpił błąd podczas płatności.");
+            console.error(err);
+            setError("Błąd płatności: " + (err.response?.data?.message || err.message));
         } finally {
             setLoading(false);
         }
     };
 
-    // Renderowanie poszczególnych kroków
-    const renderStepContent = () => {
+    // Renderowanie kroków
 
-        switch (step) {
-            case 1:
-                return (
-                    <>
-                        <h2 className="text-2xl font-bold mb-4">1. Adres i Dostawa</h2>
-                        <div className="space-y-4">
-                            {addressesLoading ? (
-                                <div className="flex justify-center items-center h-20">
-                                    <Loader className="h-6 w-6 animate-spin text-black" />
-                                    <span className="ml-3 text-gray-600">Ładowanie adresów...</span>
-                                </div>
-                            ) : addresses.length > 0 ? (
-                                addresses.map(address => (
-                                    <div
-                                        key={address.id}
-                                        className={`p-4 border rounded-lg transition-all ${checkoutData.selectedAddressId === address.id ? 'border-black ring-2 ring-black' : 'border-gray-300 hover:border-gray-500 cursor-pointer'
-                                            }`}
-                                        onClick={() => setCheckoutData(prev => ({ ...prev, selectedAddressId: address.id }))}
-                                    >
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <MapPin className="h-5 w-5 inline mr-3 text-gray-600" />
-                                                <span className="font-semibold">{address.line1}</span>, {address.postalCode} {address.city}
-                                                {address.line2 && <p className="text-sm text-gray-500 ml-8">{address.line2}</p>}
-                                            </div>
-                                            <div className="flex space-x-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => { e.stopPropagation(); handleOpenAddressModal(address); }}
-                                                    className="text-blue-600 hover:text-blue-800 p-1"
-                                                    title="Edytuj"
-                                                >
-                                                    <Edit3 className="h-4 w-4" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => { e.stopPropagation(); handleConfirmDelete(address.id); }}
-                                                    className="text-red-600 hover:text-red-800 p-1"
-                                                    title="Usuń"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="text-center p-6 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                    <XCircle className="h-8 w-8 text-yellow-600 mx-auto mb-3" />
-                                    <h3 className="font-bold text-lg mb-2">Brak aktywnych adresów</h3>
-                                    <p>Aby kontynuować, musisz dodać adres dostawy.</p>
-                                </div>
-                            )}
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => handleOpenAddressModal(null)}
-                            className="mt-4 text-blue-600 hover:text-blue-800 font-medium flex items-center space-x-2"
-                        >
-                            <PlusCircle className="h-4 w-4" /> <span>Dodaj nowy adres</span>
+    // Krok 1: Wybór adresu (User) LUB Formularz (Gość)
+    const renderStep1 = () => (
+        <div className="space-y-6">
+            <h2 className="text-2xl font-bold border-b pb-4">1. Dane Dostawy</h2>
+            
+            {isAuthenticated ? (
+                // Widok zalogowanego
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-medium text-gray-700">Twoje zapisane adresy:</h3>
+                        <button onClick={() => { setAddressToEdit(null); setShowAddressModal(true); }} className="text-blue-600 flex items-center text-sm font-bold">
+                            <PlusCircle className="h-4 w-4 mr-1"/> Dodaj nowy
                         </button>
-                        <button
-                            type="button"
-                            onClick={handleCreateOrder}
-                            disabled={loading || addressesLoading || addresses.length === 0}
-                            className="mt-6 w-full py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50"
-                        >
-                            {loading ? <Loader className="h-4 w-4 animate-spin" /> : 'Przejdź do płatności'}
-                        </button>
-                    </>
-                );
-            case 2:
-                return (
-                    <>
-                        <h2 className="text-2xl font-bold mb-4">2. Wybór Płatności</h2>
-                        <div className="space-y-4">
-                            {paymentMethods.map(method => (
-                                <div
-                                    key={method.id}
-                                    className={`p-4 border rounded-lg cursor-pointer transition-all ${checkoutData.selectedPaymentMethod === method.id ? 'border-black ring-2 ring-black' : 'border-gray-300 hover:border-gray-500'
-                                        }`}
-                                    onClick={() => setCheckoutData(prev => ({ ...prev, selectedPaymentMethod: method.id }))}
-                                >
-                                    <method.icon className="h-5 w-5 inline mr-3 text-gray-600" />
-                                    <span className="font-semibold">{method.name}</span>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Checkbox zgody na regulamin */}
-                        <div className="flex items-start pt-4 border-t border-gray-100 mt-6">
-                            <input
-                                type="checkbox"
-                                id="termsAccepted"
-                                checked={isTermsAccepted}
-                                onChange={(e) => setIsTermsAccepted(e.target.checked)}
-                                className={`h-5 w-5 text-black border-gray-300 rounded focus:ring-black mt-0.5 ${error && !isTermsAccepted ? 'border-red-500 ring-red-500' : ''}`}
-                            />
-                            <label htmlFor="termsAccepted" className={`ml-3 text-base ${error && !isTermsAccepted ? 'text-red-600' : 'text-gray-700'}`}>
-                                Zgadzam się z <Link to="/terms" target="_blank" className="text-blue-600 hover:underline font-medium">Regulaminem</Link> i <Link to="/privacy" target="_blank" className="text-blue-600 hover:underline font-medium">Polityką Prywatności</Link> *
-                            </label>
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={handleInitiatePayment}
-                            disabled={loading || !checkoutData.selectedPaymentMethod || !isTermsAccepted}
-                            className="mt-4 w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50"
-                        >
-                            {loading
-                                ? <Loader className="h-4 w-4 animate-spin" />
-                                : (checkoutData.selectedPaymentMethod === 'CASH_ON_DELIVERY'
-                                    ? 'Złóż zamówienie (Płatność przy odbiorze)'
-                                    : `Zapłać ${formatPrice(checkoutData.serverTotalAmount)} i złóż zamówienie`)}
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => { setStep(1); setError(null); setSuccess(null); }}
-                            className="mt-3 w-full py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50"
-                            disabled={loading}
-                        >
-                            <ArrowLeft className="h-4 w-4" /> <span>Wróć do wyboru adresu</span>
-                        </button>
-                    </>
-                );
-            case 3:
-                return (
-                    // Przekierowanie do OrderSuccessModal
-                    <div className="text-center p-8 bg-gray-50 border border-gray-200 rounded-lg flex flex-col items-center justify-center h-80">
-                        <CheckCircle className="h-10 w-10 text-green-600 mb-3" />
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">Dziękujemy za złożenie zamówienia!</h3>
-                        <p className="mt-2 text-gray-600">Oczekuj na automatyczne przekierowanie lub zamknij okno, aby kontynuować.</p>
-                        <p className="mt-1 text-sm text-gray-500">Zamówienie ID: {checkoutData.orderId}</p>
                     </div>
-                );
-            default:
-                return null;
-        }
-    };
 
+                    {addressesLoading && <div className="text-center py-4"><Loader className="animate-spin inline"/> Ładowanie...</div>}
+                    
+                    {!addressesLoading && addresses.length === 0 && (
+                         <div className="p-4 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded">Brak adresów. Dodaj nowy, aby zamówić.</div>
+                    )}
 
-    return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-
-            <h1 className="text-3xl font-bold text-gray-900 mb-8">Finalizacja Zamówienia</h1>
-
-            {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 flex items-center">
-                    <XCircle className="h-5 w-5 mr-2" />
-                    <span>{error}</span>
-                </div>
-            )}
-            {success && step !== 3 && (
-                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-6 flex items-center justify-between">
-                    <span>{success}</span>
-                    <button onClick={() => setSuccess(null)} className="text-green-700 font-bold ml-4">
-                        <X className="h-4 w-4" />
-                    </button>
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-                <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
-                    {renderStepContent()}
-                </div>
-
-                {/* Prawa kolumna: Podsumowanie Koszyka */}
-                <div className="lg:col-span-1">
-                    <div className="bg-gray-50 p-6 rounded-lg shadow-sm border border-gray-200 sticky top-24">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4 border-b pb-3">Podsumowanie</h2>
-
-                        {cartItems.map(item => (
-                            <div key={item.productId} className="flex justify-between items-start py-2 border-b border-gray-200">
-                                <div className="flex flex-col text-sm">
-                                    <span className="font-medium text-gray-800">{item.name}</span>
-                                    <span className="text-gray-500">Ilość: {item.quantity} x {formatPrice(item.price)}</span>
+                    <div className="grid gap-4 md:grid-cols-2">
+                        {addresses.map(addr => (
+                            <div 
+                                key={addr.id} 
+                                onClick={() => setSelectedAddressId(addr.id)}
+                                className={`p-4 border rounded-lg cursor-pointer transition-all relative ${selectedAddressId === addr.id ? 'border-black ring-1 ring-black bg-gray-50' : 'hover:border-gray-400'}`}
+                            >
+                                <div className="flex items-start">
+                                    <MapPin className="h-5 w-5 mr-2 text-gray-500 mt-1"/>
+                                    <div>
+                                        <div className="font-bold">{addr.line1}</div>
+                                        <div className="text-sm text-gray-600">{addr.postalCode} {addr.city}</div>
+                                        {addr.line2 && <div className="text-sm text-gray-500">{addr.line2}</div>}
+                                    </div>
                                 </div>
-                                <span className="font-semibold">{formatPrice(item.price * item.quantity)}</span>
+                                <div className="absolute top-2 right-2 flex space-x-1">
+                                     <button onClick={(e) => { e.stopPropagation(); setAddressToEdit(addr); setShowAddressModal(true); }} className="p-1 text-gray-400 hover:text-blue-600"><Edit3 className="h-4 w-4"/></button>
+                                     <button onClick={(e) => { e.stopPropagation(); setAddressToDelete(addr.id); setShowDeleteModal(true); }} className="p-1 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4"/></button>
+                                </div>
                             </div>
                         ))}
-
-                        <div className="space-y-3 text-gray-700 mt-4">
-                            <div className="flex justify-between">
-                                <span>Wysyłka:</span>
-                                <span className="font-medium">
-                                    {shippingCost === 0.00 && subtotal > 0 ? (
-                                        <>
-                                            <span className="line-through text-gray-500 mr-2">{formatPrice(20.00)}</span>
-                                            <span className="text-green-600">DARMOWA</span>
-                                        </>
-                                    ) : (
-                                        formatPrice(shippingCost)
-                                    )}
-                                </span>
-                            </div>
+                    </div>
+                </div>
+            ) : (
+                // Widok Gościa
+                <div className="space-y-4">
+                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-start mb-6">
+                        <User className="h-5 w-5 text-blue-600 mr-3 mt-0.5" />
+                        <div>
+                            <h3 className="font-bold text-blue-800 text-sm">Zakupy bez rejestracji</h3>
+                            <p className="text-sm text-blue-600">Wypełnij poniższe dane, aby złożyć zamówienie jednorazowo. Wszystkie pola (oprócz lokalu) są wymagane.</p>
                         </div>
+                    </div>
 
-                        <div className="border-t border-gray-300 mt-4 pt-4 flex justify-between items-center">
-                            <span className="text-xl font-bold text-gray-900">Łącznie:</span>
-                            <span className="text-2xl font-extrabold text-black">
-                                {formatPrice(checkoutData.serverTotalAmount || total)}
-                            </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm font-bold">Email *</label>
+                            <input name="email" type="email" value={guestData.email} onChange={handleGuestChange} className={`w-full border p-2 rounded ${guestErrors.email ? 'border-red-500' : ''}`} placeholder="Wpisz adres e-mail" />
+                            {guestErrors.email && <p className="text-xs text-red-500 mt-1">{guestErrors.email}</p>}
+                        </div>
+                        <div>
+                            <label className="text-sm font-bold">Telefon *</label>
+                            <input name="phone" value={guestData.phone} onChange={handleGuestChange} className={`w-full border p-2 rounded ${guestErrors.phone ? 'border-red-500' : ''}`} placeholder="Wpisz numer telefonu" />
+                            {guestErrors.phone && <p className="text-xs text-red-500 mt-1">{guestErrors.phone}</p>}
+                        </div>
+                        <div>
+                            <label className="text-sm font-bold">Imię *</label>
+                            <input name="firstName" value={guestData.firstName} onChange={handleGuestChange} className={`w-full border p-2 rounded ${guestErrors.firstName ? 'border-red-500' : ''}`} placeholder="Twoje imię" />
+                            {guestErrors.firstName && <p className="text-xs text-red-500 mt-1">{guestErrors.firstName}</p>}
+                        </div>
+                        <div>
+                            <label className="text-sm font-bold">Nazwisko *</label>
+                            <input name="lastName" value={guestData.lastName} onChange={handleGuestChange} className={`w-full border p-2 rounded ${guestErrors.lastName ? 'border-red-500' : ''}`} placeholder="Twoje nazwisko" />
+                            {guestErrors.lastName && <p className="text-xs text-red-500 mt-1">{guestErrors.lastName}</p>}
+                        </div>
+                    </div>
+
+                    <h4 className="font-bold mt-4 border-t pt-4">Adres dostawy</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="text-sm font-bold">Ulica i numer *</label>
+                            <input name="addressLine1" value={guestData.addressLine1} onChange={handleGuestChange} className={`w-full border p-2 rounded ${guestErrors.addressLine1 ? 'border-red-500' : ''}`} />
+                            {guestErrors.addressLine1 && <p className="text-xs text-red-500 mt-1">{guestErrors.addressLine1}</p>}
+                        </div>
+                        <div>
+                            <label className="text-sm font-bold">Mieszkanie/Lokal</label>
+                            <input name="addressLine2" value={guestData.addressLine2} onChange={handleGuestChange} className="w-full border p-2 rounded" />
+                        </div>
+                        <div>
+                            <label className="text-sm font-bold">Kod pocztowy *</label>
+                            <input 
+                                name="postalCode" 
+                                value={guestData.postalCode} 
+                                onChange={handleGuestChange} 
+                                className={`w-full border p-2 rounded ${guestErrors.postalCode ? 'border-red-500' : ''}`} 
+                                placeholder="00-000"
+                                maxLength={6} 
+                            />
+                            {guestErrors.postalCode && <p className="text-xs text-red-500 mt-1">{guestErrors.postalCode}</p>}
+                        </div>
+                        <div>
+                            <label className="text-sm font-bold">Miasto *</label>
+                            <input name="city" value={guestData.city} onChange={handleGuestChange} className={`w-full border p-2 rounded ${guestErrors.city ? 'border-red-500' : ''}`} />
+                            {guestErrors.city && <p className="text-xs text-red-500 mt-1">{guestErrors.city}</p>}
+                        </div>
+                        <div>
+                             <label className="text-sm font-bold">Województwo *</label>
+                             <select name="region" value={guestData.region} onChange={handleGuestChange} className="w-full border p-2 rounded bg-white">
+                                {POLISH_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                             </select>
                         </div>
                     </div>
                 </div>
+            )}
+
+            <button 
+                onClick={handleCreateOrder} 
+                disabled={loading || (isAuthenticated && !selectedAddressId)}
+                className="w-full bg-black text-white py-4 rounded-lg font-bold hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed mt-8"
+            >
+                {loading ? <Loader className="animate-spin h-5 w-5 mx-auto"/> : 'Przejdź do płatności'}
+            </button>
+        </div>
+    );
+
+    // Krok 2: Płatność (Wspólny)
+    const renderStep2 = () => (
+        <div className="space-y-6">
+            <h2 className="text-2xl font-bold border-b pb-4">2. Płatność</h2>
+            <div className="space-y-3">
+                {paymentMethods.map(m => (
+                    <div 
+                        key={m.id} 
+                        onClick={() => setSelectedPaymentMethod(m.id)}
+                        className={`flex items-center p-4 border rounded-lg cursor-pointer ${selectedPaymentMethod === m.id ? 'border-black ring-1 ring-black bg-gray-50' : 'hover:border-gray-400'}`}
+                    >
+                        <m.icon className="h-6 w-6 mr-3 text-gray-700"/>
+                        <span className="font-semibold">{m.name}</span>
+                    </div>
+                ))}
             </div>
 
-            {/* Modal edycji/dodawania adresu (formularz) */}
-            <AddressModal
-                show={showAddressModal}
-                onClose={() => {
-                    if (!isAddressSaving) { // Zapobiegaj zamknięciu podczas zapisu
-                        setShowAddressModal(false);
-                        setAddressToEdit(null);
-                    }
-                }}
-                addressToEdit={addressToEdit}
-                onSuccess={handleAddressSuccess} // Wywoływany po walidacji
-                onError={setError}
-                isProcessing={isAddressSaving} // Blokowanie inputów
-            />
+            <div className="flex items-start mt-6 p-4 bg-gray-50 rounded">
+                <input type="checkbox" id="terms" checked={isTermsAccepted} onChange={e => setIsTermsAccepted(e.target.checked)} className="mt-1 mr-3 h-5 w-5"/>
+                <label htmlFor="terms" className="text-sm text-gray-600">
+                    Oświadczam, że zapoznałem się z <Link to="/terms" className="text-blue-600 underline">Regulaminem</Link> i akceptuję jego postanowienia. *
+                </label>
+            </div>
 
-            {/* Modal potwierdzenia zapisu/edycji adresu */}
-            <ConfirmationModal
-                show={showSaveConfirmModal}
-                onClose={() => {
-                    setShowSaveConfirmModal(false);
-                    setAddressDataToSave(null);
-                }}
-                title={addressDataToSave?.isEdit ? 'Zatwierdź zmiany adresu' : 'Potwierdź dodanie adresu'}
-                message={`Czy na pewno chcesz ${addressDataToSave?.isEdit ? 'zatwierdzić zmiany w tym adresie' : 'dodać ten adres'}?`}
-                onConfirm={handleSaveAddress}
-                confirmText={addressDataToSave?.isEdit ? 'Zapisz zmiany' : 'Dodaj adres'}
-                type="success"
-                isProcessing={isAddressSaving}
-            />
+            <div className="flex gap-4 pt-4">
+                <button onClick={() => setStep(1)} disabled={loading} className="w-1/3 border border-gray-300 py-3 rounded-lg hover:bg-gray-50 font-medium">
+                    Wróć
+                </button>
+                <button 
+                    onClick={handleInitiatePayment} 
+                    disabled={loading || !isTermsAccepted}
+                    className="w-2/3 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-bold disabled:opacity-50 flex justify-center items-center"
+                >
+                    {loading ? <Loader className="animate-spin h-5 w-5"/> : `Zapłać ${formatPrice(serverTotalAmount)}`}
+                </button>
+            </div>
+        </div>
+    );
 
-            {/* Modal potwierdzenia usunięcia adresu */}
-            <ConfirmationModal
-                show={showDeleteAddressModal}
-                onClose={() => { setShowDeleteAddressModal(false); setAddressToDeleteId(null); }}
-                title="Potwierdź usunięcie"
-                message="Czy na pewno chcesz usunąć ten adres? Tej operacji nie można cofnąć."
-                onConfirm={handleDeleteAddress}
-                confirmText="Usuń"
-                type="danger"
-                isProcessing={loading}
-            />
+    return (
+        <div className="max-w-7xl mx-auto px-4 py-12">
+            <h1 className="text-3xl font-bold mb-8">Finalizacja Zamówienia</h1>
 
-            {/* Modal sukcesu zamówienia */}
-            <OrderSuccessModal
-                show={step === 3}
-                orderId={checkoutData.orderId}
-                successMessage={success}
-                onClose={() => setStep(2)}
-                navigate={navigate}
-            />
+            {/* Komunikaty błędów/sukcesu */}
+            {error && <div className="bg-red-50 text-red-700 p-4 rounded mb-6 flex items-center"><XCircle className="mr-2"/>{error}</div>}
+            {success && step !== 3 && <div className="bg-green-50 text-green-700 p-4 rounded mb-6 flex items-center"><CheckCircle className="mr-2"/>{success}</div>}
+
+            {step === 3 ? (
+                 // Krok 3: Sukces (nie renderujemy kolumn)
+                 <div className="max-w-lg mx-auto">
+                    <OrderSuccessModal show={true} orderId={orderId} successMessage={success} onClose={() => setStep(1)} navigate={navigate} isGuest={!isAuthenticated} />
+                 </div>
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Główna sekcja */}
+                    <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow border border-gray-200">
+                        {step === 1 ? renderStep1() : renderStep2()}
+                    </div>
+
+                    {/* Sidebar Podsumowania */}
+                    <div className="lg:col-span-1">
+                        <div className="bg-gray-50 p-6 rounded-lg shadow-sm border border-gray-200 sticky top-24">
+                            <h2 className="text-xl font-bold mb-4 border-b pb-2">Podsumowanie</h2>
+                            <div className="space-y-3 mb-4 max-h-60 overflow-y-auto pr-2">
+                                {cartItems.map(item => (
+                                    <div key={item.productId} className="flex justify-between text-sm">
+                                        <div>
+                                            <span className="font-medium block">{item.name}</span>
+                                            <span className="text-gray-500">{item.quantity} x {formatPrice(item.price)}</span>
+                                        </div>
+                                        <span className="font-medium">{formatPrice(item.price * item.quantity)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="space-y-2 border-t pt-3 text-sm">
+                                <div className="flex justify-between"><span>Produkty:</span><span>{formatPrice(subtotal)}</span></div>
+                                <div className="flex justify-between"><span>Dostawa:</span><span>{shippingCost === 0 ? <span className="text-green-600">Gratis</span> : formatPrice(shippingCost)}</span></div>
+                                <div className="flex justify-between text-lg font-bold border-t pt-2 mt-2">
+                                    <span>Razem:</span>
+                                    <span>{formatPrice(serverTotalAmount || total)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modale dla użytkownika zalogowanego */}
+            <AddressModal show={showAddressModal} onClose={() => setShowAddressModal(false)} addressToEdit={addressToEdit} onSuccess={handleSaveAddress} isProcessing={loading} />
+            <ConfirmationModal show={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Usuń adres" message="Czy na pewno?" onConfirm={handleDeleteAddress} type="danger" isProcessing={loading} confirmText="Usuń" />
         </div>
     );
 }

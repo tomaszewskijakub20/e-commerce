@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useOutletContext, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext'; 
-import { Loader, Package, Users, BarChart3, FolderOpen, ShoppingBag, Settings, XCircle } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { Loader, Package, ClipboardList, BarChart3, FolderOpen, ShoppingBag, Settings, XCircle } from 'lucide-react';
 
 export default function AdminDashboard() {
     const { user } = useAuth(); // Weryfikacja roli
     const navigate = useNavigate();
-    
+
     // Obiekt danych użytkownika
     const userData = user ? {
         id: user.id,
@@ -26,7 +26,7 @@ export default function AdminDashboard() {
             </div>
         );
     }
-    
+
     // Funkcja formatowania liczby
     const formatNumber = (number) => {
         return new Intl.NumberFormat('pl-PL').format(number);
@@ -55,7 +55,7 @@ export default function AdminDashboard() {
 
             {/* Sekcja kart nawigacyjnych */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-                
+
                 {/* Karta: Zarządzanie Produktami */}
                 <Link
                     to="/admin/products"
@@ -93,7 +93,7 @@ export default function AdminDashboard() {
                         </span>
                     </div>
                 </Link>
-                
+
                 {/* Karta: Zarządzanie Zamówieniami */}
                 <Link
                     to="/admin/orders"
@@ -113,21 +113,22 @@ export default function AdminDashboard() {
                     </div>
                 </Link>
 
-                {/* Karta: Zarządzanie Użytkownikami */}
+                {/* Karta: Zarządzanie Asortymentem (Inventory) */}
                 <Link
-                    to="/admin/users"
+                    to="/admin/inventory"
                     className="p-6 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors block"
                 >
                     <div className="flex items-center space-x-3 mb-3">
-                        <div className="p-2 bg-purple-100 rounded-lg">
-                            <Users className="h-6 w-6 text-purple-600" />
+                        <div className="p-2 bg-indigo-100 rounded-lg">
+                            {/* Użycie ikony ClipboardList */}
+                            <ClipboardList className="h-6 w-6 text-indigo-600" />
                         </div>
-                        <h4 className="font-semibold text-gray-900">Zarządzanie Użytkownikami</h4>
+                        <h4 className="font-semibold text-gray-900">Zarządzanie Asortymentem</h4>
                     </div>
-                    <p className="text-sm text-gray-600 mb-4">Zarządzaj użytkownikami, przeglądaj historię, nadawaj uprawnienia</p>
+                    <p className="text-sm text-gray-600 mb-4">Kontroluj stany magazynowe, aktualizuj ilość dostępnych sztuk</p>
                     <div className="flex space-x-2">
-                        <span className="text-xs bg-purple-600 text-white px-3 py-1 rounded">
-                            Przeglądaj użytkowników
+                        <span className="text-xs bg-indigo-600 text-white px-3 py-1 rounded">
+                            Sprawdź stany
                         </span>
                     </div>
                 </Link>

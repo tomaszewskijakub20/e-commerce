@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { orderService } from '../../services/orderService';
 import {
-    Loader, ShoppingBag, Eye, ArrowLeft, ChevronLeft, ChevronRight
+    Loader, ShoppingBag, Eye, ArrowLeft, ChevronLeft, ChevronRight, User
 } from 'lucide-react';
 
 // Stała domyślna wielkość strony
@@ -27,7 +27,7 @@ export default function Orders() {
     const [error, setError] = useState(null);
     const [pagination, setPagination] = useState({
         page: 0,
-        size: DEFAULT_PAGE_SIZE, // Ustawione na 50
+        size: DEFAULT_PAGE_SIZE,
         totalPages: 1,
         totalElements: 0
     });
@@ -40,17 +40,17 @@ export default function Orders() {
     // Funkcja zwracająca styl statusu
     const getStatusStyle = (status) => {
         switch (status) {
-        case 'DELIVERED':
-        case 'COMPLETED': return 'bg-green-100 border-green-300 text-green-800';
-        case 'SHIPPED': return 'bg-blue-100 border-blue-300 text-blue-800';
-        case 'CONFIRMED': return 'bg-indigo-100 border-indigo-300 text-indigo-800';
-        case 'NEW': return 'bg-yellow-100 border-yellow-300 text-yellow-800';
-        case 'CANCELLED':
-        case 'FAILED': return 'bg-red-100 border-red-300 text-red-800';
-        case 'REFUNDED': return 'bg-purple-100 border-purple-300 text-purple-800';
-        case 'PROCESSING': return 'bg-orange-100 border-orange-300 text-orange-800';
-        default: return 'bg-gray-100 border-gray-300 text-gray-600';
-    }
+            case 'DELIVERED':
+            case 'COMPLETED': return 'bg-green-100 border-green-300 text-green-800';
+            case 'SHIPPED': return 'bg-blue-100 border-blue-300 text-blue-800';
+            case 'CONFIRMED': return 'bg-indigo-100 border-indigo-300 text-indigo-800';
+            case 'NEW': return 'bg-yellow-100 border-yellow-300 text-yellow-800';
+            case 'CANCELLED':
+            case 'FAILED': return 'bg-red-100 border-red-300 text-red-800';
+            case 'REFUNDED': return 'bg-purple-100 border-purple-300 text-purple-800';
+            case 'PROCESSING': return 'bg-orange-100 border-orange-300 text-orange-800';
+            default: return 'bg-gray-100 border-gray-300 text-gray-600';
+        }
     };
 
     // Funkcja tłumacząca status
@@ -58,7 +58,7 @@ export default function Orders() {
         return orderStatusMap[status] || orderStatusMap['DEFAULT'];
     };
 
-    // Funkcja pobierająca listę zamówień z API (z paginacją)
+    // Funkcja pobierająca listę zamówień z API
     const fetchOrders = useCallback(async (page, size) => {
         setLoading(true);
         setError(null);
@@ -95,17 +95,27 @@ export default function Orders() {
 
     const handleBackToAdmin = () => navigate("/account/admin");
 
-    // Helper do wyświetlania imienia i nazwiska klienta
+    // Helper do inteligentnego wyświetlania danych klienta
     const getCustomerName = (order) => {
-        const customer = order.customer || order.user;
+        // Sprawdzamy czy są dane gościa
+        if (order.firstName || order.lastName) {
+             return `${order.firstName || ''} ${order.lastName || ''}`.trim();
+        }
+        
+        // Sprawdzamy pole guestEmail
+        if (order.guestEmail) {
+            return order.guestEmail;
+        }
 
-        if (customer && customer.firstName && customer.lastName) {
-            return `${customer.firstName} ${customer.lastName}`;
+        // Fallback dla userów
+        if (order.user) {
+             if (order.user.firstName || order.user.lastName) {
+                 return `${order.user.firstName || ''} ${order.user.lastName || ''}`.trim();
+             }
+             return order.user.email;
         }
-        if (customer && customer.email) {
-            return customer.email;
-        }
-        return `Użytkownik #${order.userId}`;
+
+        return `Użytkownik #${order.userId || 'Nieznany'}`;
     };
 
     // Obliczanie zakresu wyświetlanych elementów dla paginacji
@@ -137,7 +147,7 @@ export default function Orders() {
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900">Zarządzanie Zamówieniami</h1>
                             <p className="text-gray-600 mt-2">
-                                Przeglądaj i zarządzaj wszystkimi złożonymi zamówieniami. Na stronie wyświetlanych jest {DEFAULT_PAGE_SIZE} pozycji.
+                                Przeglądaj i zarządzaj wszystkimi złożonymi zamówieniami.
                             </p>
                         </div>
                         <div className="flex space-x-3">
@@ -200,7 +210,8 @@ export default function Orders() {
                                                     {new Date(order.createdAt).toLocaleDateString('pl-PL')}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                                                    <div className="text-sm font-medium text-gray-900">
+                                                    <div className="flex items-center text-sm font-medium text-gray-900">
+                                                        <User className="h-3 w-3 mr-2 text-gray-400" />
                                                         {getCustomerName(order)}
                                                     </div>
                                                 </td>

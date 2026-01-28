@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
-  Package, Search, Filter, X, Star, ChevronLeft, ChevronRight, Loader
+  Package, Search, X, Star, ChevronLeft, ChevronRight, Loader
 } from "lucide-react";
 import api from "../services/api";
 import { useCart } from "../context/CartContext";
@@ -44,38 +44,25 @@ export default function ProductCatalog() {
       setLoading(true);
 
       try {
-
         let productsResponse;
+        const params = new URLSearchParams();
 
         // Jeśli jest wyszukiwanie tekstowe lub filtry cenowe, używamy Search API (POST)
         if (hasSearchOrPriceFilters) {
-
-          // Wariant 1: Search API (POST /api/search)
-          const searchParams = new URLSearchParams();
-
-          if (searchTerm) searchParams.append('query', searchTerm);
-          searchParams.append('page', currentPage);
-          searchParams.append('size', ITEMS_PER_PAGE);
-
-          // WAŻNE: Sortowanie w Search API jest pominięte
-          // Filtry cenowe
-          if (filters.minPrice) searchParams.append('minPrice', filters.minPrice);
-          if (filters.maxPrice) searchParams.append('maxPrice', filters.maxPrice);
-
-          // Wysłanie pustego body, ponieważ filtry atrybutów zostały usunięte
-          productsResponse = await api.post(`/search?${searchParams.toString()}`, {});
-
-        } else {
-          // Wariant 2: Standardowe API (GET /api/products) - używane tylko do sortowania i paginacji
-
-          const [sortByField, sortDir] = filters.sortBy.split(',');
-
-          let params = new URLSearchParams();
-
+          if (searchTerm) params.append('query', searchTerm);
           params.append('page', currentPage);
           params.append('size', ITEMS_PER_PAGE);
 
-          // Sortowanie
+          if (filters.minPrice) params.append('minPrice', filters.minPrice);
+          if (filters.maxPrice) params.append('maxPrice', filters.maxPrice);
+
+          productsResponse = await api.post(`/search?${params.toString()}`, {});
+
+        } else {
+          // Standardowe API (GET /api/products)
+          const [sortByField, sortDir] = filters.sortBy.split(',');
+          params.append('page', currentPage);
+          params.append('size', ITEMS_PER_PAGE);
           params.append('sortBy', sortByField);
           params.append('sortDir', sortDir || 'asc');
 
@@ -83,7 +70,6 @@ export default function ProductCatalog() {
         }
 
         const productsData = productsResponse.data;
-
         const productsList = productsData.content || [];
         setProducts(productsList);
         setTotalPages(productsData.totalPages || 1);
@@ -99,10 +85,9 @@ export default function ProductCatalog() {
       }
     };
 
-    // Opóźnienie wyszukiwania po wpisaniu tekstu
     const timeoutId = setTimeout(() => {
       loadProducts();
-    }, searchTerm ? 300 : 0);
+    }, 500);
 
     return () => clearTimeout(timeoutId);
 
@@ -112,7 +97,6 @@ export default function ProductCatalog() {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
-  // Uproszczone czyszczenie filtrów
   const clearFilters = () => {
     setFilters({
       minPrice: "",
@@ -122,63 +106,61 @@ export default function ProductCatalog() {
     setSearchTerm("");
   };
 
-  // Flaga, czy jakieś filtry są aktywne (wykluczając sortowanie domyślne)
   const hasActiveFilters = filters.minPrice || filters.maxPrice || filters.sortBy !== DEFAULT_SORT || searchTerm;
 
-  // Produkty do renderowania
-  const productsToRender = products;
-
-  // Renderowanie gwiazdek
-  const renderStars = (rating) => {
-    return (
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Star
-            key={star}
-            className={`h-3 w-3 ${star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-              }`}
-          />
-        ))}
-      </div>
-    );
-  };
-
-  // Karta produktu
+  // --- ZAKTUALIZOWANA KARTA PRODUKTU (Flexbox + Sticky Footer) ---
   const ProductCard = ({ product }) => (
     <Link
       to={`/product/${product.seoSlug}`}
-      className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow group"
+      className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all group flex flex-col h-full"
     >
-      <div className="aspect-square overflow-hidden bg-gray-100">
+      {/* Obrazek */}
+      <div className="aspect-square overflow-hidden bg-gray-100 relative">
         <img
           src={product.thumbnailUrl || "/api/placeholder/300/300"}
           alt={product.name}
-          className="w-full h-full object-cover hover:scale-105 transition-transform"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
+        {!product.isActive && (
+           <div className="absolute top-2 right-2 bg-red-500 text-white text-[10px] px-2 py-1 rounded uppercase font-bold tracking-wider">
+               Niedostępny
+           </div>
+        )}
       </div>
-      <div className="p-4">
-        <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2 group-hover:text-blue-600">{product.name}</h3>
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-lg font-bold text-gray-900">
-            {typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'} zł
-          </span>
-        </div>
 
-        <button
-          onClick={(e) => {
-            e.preventDefault(); // Zapobiegaj Linkowi
-            addToCart(product);
-          }} // Dodanie obsługi do koszyka
-          className="w-full bg-black text-white py-2 px-4 rounded-lg hover:bg-gray-800 transition-colors font-medium"
-        >
-          Dodaj do koszyka
-        </button>
+      {/* Treść */}
+      <div className="p-4 flex flex-col flex-grow">
+        <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2 group-hover:text-blue-600">
+          {product.name}
+        </h3>
+        
+        {/* Gwiazdki (jeśli używasz) - opcjonalne */}
+        {/* <div className="mb-2">{renderStars(4)}</div> */}
+
+        {/* Pusty element wypychający dół */}
+        <div className="flex-grow"></div>
+
+        {/* Sekcja dolna: Cena i Przycisk */}
+        <div className="mt-4 space-y-3">
+          <div className="text-lg font-bold text-gray-900">
+            {typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'} zł
+          </div>
+
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              addToCart(product);
+            }}
+            className="w-full bg-black text-white py-2 px-4 rounded-lg hover:bg-gray-800 transition-colors font-medium flex items-center justify-center gap-2"
+          >
+            Dodaj do koszyka
+          </button>
+        </div>
       </div>
     </Link>
   );
 
-
-  if (loading && productsToRender.length === 0) {
+  if (loading && products.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -204,7 +186,7 @@ export default function ProductCatalog() {
                 Odkryj naszą kolekcję unikalnych produktów
               </p>
             </div>
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-gray-600 hidden sm:block">
               Znaleziono {totalProducts} produktów
             </div>
           </div>
@@ -213,7 +195,7 @@ export default function ProductCatalog() {
         {/* Główny Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
 
-          {/* Filtry */}
+          {/* Kolumna Filtrów (1/4 szerokości) */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-24">
               <div className="flex justify-between items-center mb-6">
@@ -277,7 +259,7 @@ export default function ProductCatalog() {
                 <select
                   value={filters.sortBy}
                   onChange={(e) => handleFilterChange('sortBy', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black focus:border-black"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black focus:border-black bg-white"
                 >
                   <option value="name,asc">Nazwa A-Z</option>
                   <option value="name,desc">Nazwa Z-A</option>
@@ -288,12 +270,12 @@ export default function ProductCatalog() {
             </div>
           </div>
 
-          {/* Produkty */}
+          {/* Kolumna Produktów (3/4 szerokości) */}
           <div className="lg:col-span-3">
-            {productsToRender.length > 0 ? (
+            {products.length > 0 ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {productsToRender.map((product) => (
+                  {products.map((product) => (
                     <ProductCard key={product.id} product={product} />
                   ))}
                 </div>
@@ -311,7 +293,6 @@ export default function ProductCatalog() {
                     </button>
 
                     <div className="flex space-x-1">
-                      {/* Renderowanie przycisków stron */}
                       {Array.from({ length: totalPages }, (_, i) => i).map(page => (
                         <button
                           key={page}
@@ -353,7 +334,6 @@ export default function ProductCatalog() {
           </div>
         </div>
       </div>
-
     </div>
   );
 }

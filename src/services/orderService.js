@@ -19,7 +19,7 @@ const getOrders = async ({ page = 0, size = 10, search = '' }) => {
 };
 
 export const orderService = {
-    // Tworzenie zamówienia
+    // Tworzenie zamówienia (Zalogowany użytkownik)
     createOrder: async (orderData) => {
         try {
             const response = await api.post('/orders', orderData);
@@ -30,12 +30,23 @@ export const orderService = {
         }
     },
 
+    // Tworzenie zamówienia (Gość)
+    createGuestOrder: async (guestOrderData) => {
+        // Endpoint: POST /api/orders/guest
+        try {
+            const response = await api.post('/orders/guest', guestOrderData);
+            return response.data;
+        } catch (error) {
+            console.error('Błąd tworzenia zamówienia dla gościa:', error);
+            throw error;
+        }
+    },
+
     // Pobieranie listy własnych zamówień
     getMyOrders: async (userId) => {
         // Endpoint: GET /api/orders/user/{userId}
         try {
             const response = await api.get(`/orders/user/${userId}`);
-            // Zakładamy, że ten endpoint może zwrócić paginowany obiekt lub tablicę
             return response.data; 
         } catch (error) {
             console.error(`Błąd pobierania zamówień dla użytkownika ${userId}:`, error);
@@ -58,7 +69,6 @@ export const orderService = {
     // Pobieranie szczegółów zamówienia
     getOrderDetails: async (orderId) => {
         // Endpoint: GET /api/orders/{id}
-        // Endpoint ten zwraca również zagnieżdżone płatności.
         try {
             const response = await api.get(`/orders/${orderId}`);
             return response.data;

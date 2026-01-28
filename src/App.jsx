@@ -1,4 +1,3 @@
-// src/App.jsx
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
@@ -23,15 +22,12 @@ import Search from "./pages/Search";
 import ProductCatalog from "./pages/ProductCatalog";
 import CategoryCatalog from "./pages/CategoryCatalog";
 import ProductDetail from "./pages/ProductDetail";
-import Shipping from "./pages/Shipping";
 import FAQ from "./pages/FAQ";
-import Terms from "./pages/Terms";
-import Privacy from "./pages/Privacy";
-import Cookies from "./pages/Cookies";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import AccountActivate from "./pages/AccountActivate";
 import ResetPassword from "./pages/ResetPassword";
+import PageViewer from "./pages/PageViewer";
 
 // Strony Chronione (Tylko dla zalogowanych)
 import AccountLayout from "./pages/account/AccountLayout";
@@ -43,10 +39,13 @@ import SettingsPanel from "./pages/account/SettingsPanel";
 import AdminDashboard from "./pages/account/AdminDashboard";
 
 
-// Strony Chronione (Owner - admin/*)
+// Strony Chronione (Owner)
 import Products from "./pages/admin/Products";
 import Categories from "./pages/admin/Categories";
 import Orders from "./pages/admin/Orders";
+import Inventory from "./pages/admin/Inventory";
+import Stats from "./pages/admin/Stats";
+import Settings from "./pages/admin/Settings";
 import CategoryAdd from "./pages/admin/components/CategoryAdd";
 import CategoryEdit from "./pages/admin/components/CategoryEdit";
 import CategoryView from "./pages/admin/components/CategoryView";
@@ -68,8 +67,7 @@ function AppContent() {
         <Navbar />
         <main className="flex-grow pt-14">
           <Routes>
-            {/* --- Trasy Publiczne --- */}
-            {/* ... (trasy publiczne) ... */}
+            {/* Trasy Publiczne */}
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -78,23 +76,23 @@ function AppContent() {
             <Route path="/activate" element={<AccountActivate />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/search" element={<Search />} />
-            <Route path="/shipping" element={<Shipping />} />
-            <Route path="/faq" element={<FAQ />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/cookies" element={<Cookies />} />
             <Route path="/products" element={<ProductCatalog />} />
             <Route path="/categories" element={<CategoryCatalog />} />
-            <Route path="/category/:id" element={<ProductCatalog />} />
+            <Route path="/category/:id" element={<CategoryCatalog />} />
             <Route path="/product/:slug" element={<ProductDetail />} />
             <Route path="/cart" element={<Cart />} />
+            <Route path="/checkout" element={<Checkout />} />
+            
+            {/* Strony Statyczne */}
+            <Route path="/faq" element={<FAQ />} /> 
+            
+            {/* Obsługa stron CMS */}
+            <Route path="/pages/:slug" element={<PageViewer />} />
 
-
-            {/* --- Trasy Chronione (tylko zalogowani) --- */}
+            {/* Trasy Chronione (tylko zalogowani) */}
             <Route element={<ProtectedRoute />}>
-              <Route path="/checkout" element={<Checkout />} />
 
-              {/* ACCOUNT LAYOUT JAKO KONTENER DLA ZAKŁADEK */}
+              {/* Kontener dla zakładek */}
               <Route path="/account" element={<AccountLayout />}>
                 <Route index element={<ProfileDetails />} />
                 <Route path="profile" element={<ProfileDetails />} />
@@ -104,12 +102,12 @@ function AppContent() {
                 <Route path="admin" element={<AdminDashboard />} />
               </Route>
 
-              {/* --- ZMIANA: OrderDetails jest osobnym widokiem --- */}
+              {/* Szczegóły zamówienia */}
               <Route path="/account/orders/:id" element={<OrderDetails />} />
 
             </Route>
 
-            {/* --- Trasy Właściciela (ROLE_OWNER) --- */}
+            {/* Trasy Właściciela (Owner) */}
             <Route path="/admin" element={<OwnerRoute />}>
               <Route index element={<AdminDashboard />} />
 
@@ -127,8 +125,13 @@ function AppContent() {
               <Route path="products/:id" element={<ProductView />} />
               <Route path="products/:id/edit" element={<ProductEdit />} />
 
+              <Route path="inventory" element={<Inventory />} />
+              
               <Route path="orders" element={<Orders />} />
               <Route path="orders/:id" element={<AdminOrderDetails />} />
+
+              <Route path="stats" element={<Stats />} />
+              <Route path="settings" element={<Settings />} />
             </Route>
 
           </Routes>

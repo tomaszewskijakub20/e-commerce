@@ -1,14 +1,24 @@
 import api from './api';
 
 export const paymentService = {
-    // Tworzenie płatności
+    // Tworzenie płatności (Zalogowany użytkownik)
     createPayment: async (paymentData) => {
-        // paymentData: { orderId, amount, method, transactionId, notes }
         try {
             const response = await api.post('/payments', paymentData);
             return response.data;
         } catch (error) {
             console.error('Błąd tworzenia płatności:', error);
+            throw error;
+        }
+    },
+
+    // Tworzenie płatności (Gość)
+    createGuestPayment: async (guestPaymentData) => {
+        try {
+            const response = await api.post('/payments/guest', guestPaymentData);
+            return response.data;
+        } catch (error) {
+            console.error('Błąd tworzenia płatności dla gościa:', error);
             throw error;
         }
     },
@@ -39,7 +49,7 @@ export const paymentService = {
         }
     },
 
-    // Symulacja płatności
+    // Symulacja płatności (Zalogowany użytkownik)
     simulatePayment: async (paymentId, scenario = 'SUCCESS') => {
         // Endpoint: POST /api/payments/{paymentId}/simulate
         try {
@@ -47,6 +57,23 @@ export const paymentService = {
             return response.data;
         } catch (error) {
             console.error('Błąd symulacji płatności:', error);
+            throw error;
+        }
+    },
+
+    // Symulacja płatności (Gość)
+    simulateGuestPayment: async (paymentId, email, scenario = 'SUCCESS') => {
+        // Endpoint: POST /api/payments/guest/{paymentId}/simulate
+        try {
+            const response = await api.post(`/payments/guest/${paymentId}/simulate`, null, {
+                params: {
+                    email: email,
+                    scenario: scenario
+                }
+            });
+            return response.data;
+        } catch (error) {
+            console.error('Błąd symulacji płatności dla gościa:', error);
             throw error;
         }
     },

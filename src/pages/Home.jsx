@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Star, ArrowRight, Truck, Shield, Headphones, Award, Loader } from "lucide-react";
+import { Star, ArrowRight, Truck, Shield, Headphones, Award, Loader, CheckCircle, AlertCircle } from "lucide-react";
 import api from "../services/api";
 import { useCart } from "../context/CartContext";
 
@@ -10,6 +10,11 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const { addToCart } = useCart();
 
+  // Newsletter
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterStatus, setNewsletterStatus] = useState("idle");
+  const [newsletterMessage, setNewsletterMessage] = useState("");
+
   // Pobieranie danych z API
   useEffect(() => {
     const loadData = async () => {
@@ -17,20 +22,17 @@ export default function Home() {
         setLoading(true);
 
         const [featuredResponse, categoriesResponse] = await Promise.allSettled([
-          api.get('/products/featured'), // Pobierz polecane produkty
-          api.get('/categories/active') // Pobierz tylko aktywne kategorie
+          api.get('/products/featured'),
+          api.get('/categories/active')
         ]);
 
-        // Przetwarzanie produktów polecanych
         if (featuredResponse.status === 'fulfilled') {
-          // Używamy product.content, ponieważ API zwraca Page<ProductSummaryDTO>
           setFeatured(featuredResponse.value.data.content || []);
         } else {
           console.error('Błąd ładowania produktów polecanych:', featuredResponse.reason);
           setFeatured([]);
         }
 
-        // Przetwarzanie kategorii
         if (categoriesResponse.status === 'fulfilled') {
           setCategories(categoriesResponse.value.data || []);
         } else {
@@ -46,9 +48,36 @@ export default function Home() {
     };
 
     loadData();
-  }, []); // Uruchom tylko raz
+  }, []);
 
-  // Lista głównych cech/zalet sklepu
+  // Handler Newslettera
+  const handleSubscribe = async (e) => {
+    e.preventDefault();
+    if (!newsletterEmail || !newsletterEmail.includes('@')) {
+        setNewsletterStatus("error");
+        setNewsletterMessage("Podaj poprawny adres email.");
+        return;
+    }
+
+    setNewsletterStatus("loading");
+    setNewsletterMessage("");
+
+    try {
+        await api.post('/newsletter/subscribe', { email: newsletterEmail });
+        
+        setNewsletterStatus("success");
+        setNewsletterMessage("Dziękujemy za zapisanie się do newslettera!");
+        setNewsletterEmail("");
+    } catch (err) {
+        setNewsletterStatus("error");
+        if (err.response && err.response.status === 409) {
+            setNewsletterMessage("Ten adres email jest już zapisany.");
+        } else {
+            setNewsletterMessage("Wystąpił błąd. Spróbuj ponownie później.");
+        }
+    }
+  };
+
   const features = [
     {
       icon: <Truck className="h-8 w-8" />,
@@ -72,44 +101,23 @@ export default function Home() {
     }
   ];
 
-  // Funkcja do renderowania gwiazdek (oceny)
-  const renderStars = (rating) => {
-    return (
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Star
-            key={star}
-            className={`h-3 w-3 ${star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-              }`}
-          />
-        ))}
-      </div>
-    );
-  };
-
-  // Funkcja do wybierania kategorii końcowych (liści)
   const getLeafCategories = (categoriesList) => {
     const leafCategories = [];
-
     const findLeaves = (categoryList) => {
       categoryList.forEach(category => {
-        // Jeśli kategoria ma dzieci, przechodź dalej
         if (category.children && category.children.length > 0) {
           findLeaves(category.children);
         } else {
-          // Jeśli nie ma dzieci, jest liściem
           leafCategories.push(category);
         }
       });
     };
-
     findLeaves(categoriesList);
-    return leafCategories.slice(0, 4); // Pokaż tylko 4
+    return leafCategories.slice(0, 4);
   };
 
   const popularCategories = getLeafCategories(categories);
 
-  // Komponent karty produktu
   const ProductCard = ({ product }) => (
     <Link
       to={`/product/${product.seoSlug}`}
@@ -124,20 +132,17 @@ export default function Home() {
       </div>
       <div className="p-4">
         <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{product.name}</h3>
-
         <p className="text-gray-600 text-sm mb-2 line-clamp-2">
           {product.shortDescription}
         </p>
-
         <div className="flex items-center gap-2 mb-3">
           <span className="text-lg font-bold text-gray-900">
             {typeof product.price === 'number' ? product.price.toFixed(2) : '0.00'} zł
           </span>
         </div>
-
         <button
           onClick={(e) => {
-            e.preventDefault(); // Zapobiegaj przejściu do Linku
+            e.preventDefault();
             addToCart(product);
           }}
           className="w-full bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 transition-colors"
@@ -148,7 +153,6 @@ export default function Home() {
     </Link>
   );
 
-  // Ekran ładowania
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -160,7 +164,6 @@ export default function Home() {
     );
   }
 
-  // Główny komponent
   return (
     <div className="min-h-screen">
       {/* Hero Banner */}
@@ -306,16 +309,46 @@ export default function Home() {
           <p className="text-gray-300 mb-8">
             Zapisz się do newslettera i otrzymuj informacje o nowościach, ekskluzywnych ofertach i promocjach
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
-            <input
-              type="email"
-              placeholder="Twój adres email"
-              className="flex-1 px-4 py-3 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button className="bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors">
-              Zapisz się
-            </button>
-          </div>
+          
+          <form onSubmit={handleSubscribe} className="flex flex-col gap-4 max-w-md mx-auto">
+            <div className="flex flex-col sm:flex-row gap-4">
+                <input
+                type="email"
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
+                placeholder="Twój adres email"
+                disabled={newsletterStatus === 'loading' || newsletterStatus === 'success'}
+                className="flex-1 px-4 py-3 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                required
+                />
+                <button 
+                    type="submit" 
+                    disabled={newsletterStatus === 'loading' || newsletterStatus === 'success'}
+                    className="bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center min-w-[120px]"
+                >
+                {newsletterStatus === 'loading' ? (
+                    <Loader className="animate-spin h-5 w-5" />
+                ) : (
+                    "Zapisz się"
+                )}
+                </button>
+            </div>
+
+            {/* Komunikaty statusu */}
+            {newsletterStatus === 'success' && (
+                <div className="flex items-center justify-center gap-2 text-green-400 mt-2 bg-gray-800 p-3 rounded-md animate-in fade-in">
+                    <CheckCircle className="h-5 w-5" />
+                    <span>{newsletterMessage}</span>
+                </div>
+            )}
+
+            {newsletterStatus === 'error' && (
+                <div className="flex items-center justify-center gap-2 text-red-400 mt-2 bg-gray-800 p-3 rounded-md animate-in fade-in">
+                    <AlertCircle className="h-5 w-5" />
+                    <span>{newsletterMessage}</span>
+                </div>
+            )}
+          </form>
         </div>
       </section>
     </div>
